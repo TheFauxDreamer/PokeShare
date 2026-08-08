@@ -21,6 +21,7 @@ import {
 } from "../lib/input.js";
 import { useFastForward } from "../lib/useFastForward.js";
 import { useGameInput } from "../lib/useGameInput.js";
+import { useSaveSync } from "../lib/useSaveSync.js";
 import { snapshotDigest, toPlayerSnapshot } from "../lib/snapshot.js";
 import { useRun } from "../lib/useRun.js";
 import { publishCanvas } from "../lib/video.js";
@@ -160,6 +161,9 @@ function ConnectedPlayView({
 
   // Focus-independent key forwarding; see useGameInput.
   useGameInput(emulator, bindings, !!romName);
+
+  // Without this the in-game save never reaches durable storage.
+  useSaveSync(emulator, !!romName);
 
   // Push rebinds straight through; no reload needed.
   useEffect(() => {

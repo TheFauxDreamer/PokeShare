@@ -15,6 +15,7 @@ import {
 } from "../lib/input.js";
 import { useFastForward } from "../lib/useFastForward.js";
 import { useGameInput } from "../lib/useGameInput.js";
+import { useSaveSync } from "../lib/useSaveSync.js";
 
 /**
  * The Phase 1 spike, as a page.
@@ -51,6 +52,9 @@ export function DiagnosticsView() {
 
   // Focus-independent key forwarding; see useGameInput.
   useGameInput(emulator, bindings, !!romName);
+
+  // Without this the in-game save never reaches durable storage.
+  useSaveSync(emulator, !!romName);
 
   useEffect(() => {
     emulator?.setBindings(bindings);

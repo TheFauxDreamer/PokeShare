@@ -50,6 +50,14 @@ export interface Emulator {
   setSpeed(multiplier: number): void;
   /** Elemental types for an internal species index, read from the ROM. */
   typesFor(speciesInternal: number): string[];
+  /**
+   * Flush the emulator filesystem to IndexedDB.
+   *
+   * The in-game save (the battery save the cartridge would hold) lives in an
+   * IDBFS mount that only reaches durable storage when this is called. Without
+   * it, closing the tab loses the save — hours of a Nuzlocke, silently.
+   */
+  syncSaves(): Promise<void>;
   /** Current game state, or `undefined` before a ROM is running. */
   poll(): GameSnapshot | undefined;
   readonly layout: GameLayout | undefined;
@@ -124,6 +132,10 @@ export async function createEmulator(
     typesFor(speciesInternal: number) {
       if (!rom || !layout) return [];
       return readSpeciesTypes(rom, layout, speciesInternal);
+    },
+
+    async syncSaves() {
+      await module.FSSync();
     },
 
     setBindings(bindings: Bindings) {

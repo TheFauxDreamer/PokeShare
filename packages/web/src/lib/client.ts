@@ -80,7 +80,20 @@ export class RunClient {
   close(): void {
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
-    this.socket?.close();
+
+    const socket = this.socket;
+    if (!socket) return;
+
+    if (socket.readyState === WebSocket.CONNECTING) {
+      // Closing mid-handshake logs "WebSocket is closed before the connection
+      // is established" in Safari and Chrome. Harmless, but it looks like a
+      // real failure in the console — and React StrictMode causes it on every
+      // mount in development. Wait for the handshake, then close quietly.
+      socket.addEventListener("open", () => socket.close(), { once: true });
+      socket.addEventListener("error", () => socket.close(), { once: true });
+      return;
+    }
+    socket.close();
   }
 }
 

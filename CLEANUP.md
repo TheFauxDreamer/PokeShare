@@ -128,15 +128,22 @@ so there is nothing to clean up in `/usr/local` or `/Library`.
 
 ## 6. Browser storage
 
-The app stores a little data per browser profile, under `localhost:5173`:
+The app stores data per browser profile, under `localhost:5173`:
 
 - `pokeshare.clientId.*` — which player seat you own
 - `pokeshare.bindings` — your key bindings
-- The emulator's in-memory filesystem, holding **the ROM you loaded** and its
-  save files
+- `pokeshare.playerName` — your display name
+- An IndexedDB filesystem holding **the ROM you loaded and its in-game save**
 
-Clear it from the browser: **Developer Tools → Application → Storage → Clear
-site data**, or just delete the site data for `localhost` in your browser's
+> **Your Pokémon save lives here.** Not in the project folder — in browser
+> storage. Clearing site data for `localhost` deletes the save file for your
+> run, exactly as if you had lost the cartridge. Back it up first if the run
+> still matters: on `/play`, the emulator writes a standard `.sav` you can
+> export through the browser's IndexedDB inspector, or simply keep the site data
+> until you are finished.
+
+To clear it once you are done: **Developer Tools → Application → Storage →
+Clear site data**, or delete the site data for `localhost` in your browser
 settings. Worth doing if you would rather not leave a ROM in browser storage.
 
 ---

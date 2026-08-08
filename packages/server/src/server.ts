@@ -186,16 +186,6 @@ export function createPokeShareServer(
         return;
       }
 
-      default: {
-        // Unknown discriminant. Answering explicitly beats silence: a client
-        // sending a message this server does not understand should find out.
-        send(client.socket, {
-          type: "error",
-          message: `Unknown message type: ${String((message as { type?: unknown }).type)}`,
-        });
-        return;
-      }
-
       case "signal": {
         // WebRTC offer/answer/ICE. Relayed as-is; the server never inspects it.
         if (!client.run) return;
@@ -209,6 +199,16 @@ export function createPokeShareServer(
             });
           }
         }
+        return;
+      }
+
+      default: {
+        // Unknown discriminant. Answering explicitly beats silence: a client
+        // sending a message this server does not understand should find out.
+        send(client.socket, {
+          type: "error",
+          message: `Unknown message type: ${String((message as { type?: unknown }).type)}`,
+        });
         return;
       }
     }
