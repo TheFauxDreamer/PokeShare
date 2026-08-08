@@ -28,9 +28,23 @@ The save-state layout in `packages/gba/src/savestate.ts` follows
 - <https://github.com/mgba-emu/mgba>
 - <https://github.com/thenick775/gbajs3>
 
-## No game assets
+## Sprites — PokeAPI/sprites
 
-This repository contains **no ROMs and no assets ripped from any Pokémon game**.
-Players supply their own ROM, which is loaded from local disk into their own
-browser and never uploaded. Pokémon and Game Boy Advance are trademarks of their
-respective owners; this project is unaffiliated with and unendorsed by them.
+`packages/web/public/sprites/` contains Generation III Pokémon sprites fetched
+from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) by
+`scripts/fetch-sprites.sh`, the community-standard set for this purpose.
+
+Stated plainly: PokeAPI declares no explicit licence for these files (GitHub
+reports `NOASSERTION`), and the underlying artwork is the property of Nintendo,
+Game Freak and The Pokémon Company. They are included here on the same basis as
+the wider fan-tooling community uses them. Anyone redistributing or hosting this
+project publicly should make their own decision about that.
+
+Run `scripts/fetch-sprites.sh` to re-fetch; it is idempotent.
+
+## No ROMs
+
+This repository contains **no ROMs**. Players supply their own, which is loaded
+from local disk into their own browser and never uploaded. Pokémon and Game Boy
+Advance are trademarks of their respective owners; this project is unaffiliated
+with and unendorsed by them.

@@ -10,7 +10,11 @@
     "dev:server": "pnpm --filter @pokeshare/server dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:mapsec": "python3 scripts/gen-mapsec.py"
+    "gen:mapsec": "python3 scripts/gen-mapsec.py",
+    "gen:species": "python3 scripts/gen-species.py",
+    "gen:families": "python3 scripts/gen-families.py",
+    "gen:sprites": "bash scripts/fetch-sprites.sh",
+    "gen": "pnpm gen:mapsec && pnpm gen:species && pnpm gen:families && pnpm gen:sprites"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

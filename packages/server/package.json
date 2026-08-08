@@ -13,6 +13,7 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
+    "@pokeshare/data": "workspace:^",
     "@pokeshare/shared": "workspace:*",
     "fastify": "^5.11.2",
     "ws": "^8.21.3"

@@ -1,29 +1,28 @@
+import { useState } from "react";
 import type { PartyMemberState, SoulLinkPair } from "@pokeshare/shared";
 
 /**
- * Sprite by National Dex number, with a readable fallback.
+ * Sprite by National Dex number, served from `public/sprites/<dex>.png`.
  *
- * No sprite assets ship yet; drop PNGs into `public/sprites/<dex>.png` and they
- * light up with no code change. Until then the monogram keeps the layout honest
- * rather than showing a broken image on stream.
+ * Falls back to the dex number rather than a broken image, which matters: a
+ * randomised ROM can surface a species outside the bundled 1-386 range, and
+ * that must not put a broken-image icon on stream.
  */
 function Sprite({ dex, name }: { dex: number | undefined; name: string }) {
+  const [failed, setFailed] = useState(false);
+
   if (dex === undefined) {
     return <div className="sprite sprite--unknown">?</div>;
+  }
+  if (failed) {
+    return <div className="sprite sprite--fallback">{dex}</div>;
   }
   return (
     <img
       className="sprite"
       src={`/sprites/${dex}.png`}
       alt={name}
-      onError={(event) => {
-        const img = event.currentTarget;
-        img.style.display = "none";
-        img.insertAdjacentHTML(
-          "afterend",
-          `<div class="sprite sprite--fallback">${dex}</div>`,
-        );
-      }}
+      onError={() => setFailed(true)}
     />
   );
 }

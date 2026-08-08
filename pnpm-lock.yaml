@@ -31,6 +31,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@pokeshare/data':
+        specifier: workspace:^
+        version: link:../data
       '@pokeshare/shared':
         specifier: workspace:*
         version: link:../shared

@@ -18,6 +18,10 @@
  */
 
 import {
+  exactSpecies,
+  familyOf as vanillaFamilyOf,
+} from "@pokeshare/data";
+import {
   levelCapForBadges,
   type ClauseWarning,
   type PairMember,
@@ -62,6 +66,8 @@ export interface EngineState {
   /** Last observed HP per PID, for edge-triggered faint detection. */
   readonly lastHp: Record<PlayerId, Map<number, number>>;
   readonly familyOf: FamilyResolver;
+  /** True for a UPR-ZX ROM, where vanilla evolution families do not apply. */
+  readonly randomised: boolean;
 }
 
 export type EngineEvent =
@@ -69,10 +75,27 @@ export type EngineEvent =
   | { readonly type: "death_pending"; readonly route: string; readonly by: PlayerId }
   | { readonly type: "death_confirmed"; readonly route: string };
 
+/**
+ * Create a run.
+ *
+ * `randomised` selects the clause resolver: vanilla evolution families by
+ * default, exact species for a UPR-ZX ROM (whose evolutions differ from
+ * vanilla, making the bundled family table wrong).
+ */
 export function createRun(
   runId: string,
   joinCode: string,
-  familyOf: FamilyResolver = (dex) => dex,
+  randomised = false,
+): EngineState {
+  const familyOf: FamilyResolver = randomised ? exactSpecies : vanillaFamilyOf;
+  return buildRun(runId, joinCode, familyOf, randomised);
+}
+
+function buildRun(
+  runId: string,
+  joinCode: string,
+  familyOf: FamilyResolver,
+  randomised: boolean,
 ): EngineState {
   return {
     runId,
@@ -82,6 +105,7 @@ export function createRun(
     seenPids: { a: new Set(), b: new Set() },
     lastHp: { a: new Map(), b: new Map() },
     familyOf,
+    randomised,
   };
 }
 

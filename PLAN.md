@@ -71,6 +71,8 @@ Also reusable: `data/RouteData.lua` (map ID → route name) and `data/PokemonDat
 
 The Nuzlocke-critical fields (level, HP, status) are **unencrypted**. Only species/item need decryption: XOR the data section with `PID XOR OTID`, substruct order = `PID % 24`. The `0x1C` checksum gives a free correctness check. **PID is the stable primary key** for a Pokémon across the whole system — it survives nicknames, level-ups and reordering.
 
+**6. Gen 3 internal species indices are not National Dex numbers, and the offset is not fixed.** A trap worth stating plainly. Treecko sits at internal 277 → national 252, so "subtract 25" looks correct and is widely repeated — but **109 of the 386 species break it**: `SPECIES_NINCADA` is internal 301 and national 290, not 276. Sprites and both clauses key on National Dex, so a naive shift silently mislabels a quarter of the dex. `packages/data/src/species.generated.ts` holds the real table, joined by species name from pokeemerald's `constants/species.h` (internal) and `constants/pokedex.h` (national). Internal 252–276 are the `OLD_UNOWN_*` placeholders and map to nothing.
+
 ---
 
 ## Architecture
@@ -180,8 +182,9 @@ Neither player ever types a species, level, or route. The **only** human action 
 **Rules, all server-side:**
 - Wild battle starts (`gBattleTypeFlags`) → read opponent species + `gMapHeader` → if it's the first encounter on that route, that's the route encounter.
 - **Pairing is by route name.** Vanilla Gen 3 has a stable, shared route list, so A's Route 103 encounter pairs with B's Route 103 encounter directly — no ordinal gymnastics.
-- **Dupes clause**: flag an encounter whose species (as randomised, read live) was already caught; offer re-roll.
-- **Species clause on pairs**: warn on illegal links, using the **randomised evolution table read from ROM**.
+- **Dupes clause**: flag an encounter whose family was already caught by that player; offer re-roll.
+- **Species clause on pairs**: warn when a pair links two members of one family.
+- Both clauses compare **evolutionary families**, generated from pokeemerald into `packages/data/src/families.generated.ts`. These are *vanilla* evolutions, so a run can be flagged **randomised**, which falls back to exact-species matching. Reading the real table out of a randomised ROM would need a per-version `gEvolutionTable` address, and no published source for one was found — note also that a save state contains **no ROM**, so this would have to read the ROM file directly, not the state.
 - **Level cap**: badge count from `gSaveBlock1ptr + badgeOffset`; highlight any Pokémon over cap.
 - **Death**: party HP `>0 → 0` → `death_pending` → prominent alert on all views naming the partner to retire → **explicit confirm** → cascade to the linked partner and push everywhere.
 - Manual override for every one of the above. Auto-detection is a convenience with a fast override, never a constraint.

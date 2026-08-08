@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  familyOf,
   internalToNationalDex,
   layoutForGameCode,
   nationalDexToInternal,
@@ -165,24 +166,64 @@ describe("species index mapping", () => {
     expect(internalToNationalDex(251)).toBe(251);
   });
 
-  it("shifts Gen 3 by 25", () => {
-    expect(internalToNationalDex(277)).toBe(252); // Treecko
-    expect(internalToNationalDex(411)).toBe(386); // Deoxys
+  /**
+   * Internal order is NOT National Dex order, and there is no fixed offset.
+   * Treecko coincidentally satisfies "internal - 25", which is exactly what
+   * makes the wrong assumption so easy to ship; Nincada does not.
+   */
+  it("uses a real table for Gen 3, not a fixed offset", () => {
+    expect(internalToNationalDex(277)).toBe(252); // Treecko — matches -25
+    expect(internalToNationalDex(301)).toBe(290); // Nincada — -25 gives 276
+    expect(internalToNationalDex(303)).toBe(292); // Shedinja
+    expect(internalToNationalDex(410)).toBe(386); // Deoxys, the last species
   });
 
   it("rejects the glitch range and out-of-range values", () => {
-    expect(internalToNationalDex(252)).toBeUndefined();
+    expect(internalToNationalDex(252)).toBeUndefined(); // OLD_UNOWN_B
     expect(internalToNationalDex(276)).toBeUndefined();
     expect(internalToNationalDex(0)).toBeUndefined();
     expect(internalToNationalDex(412)).toBeUndefined();
   });
 
-  it("inverts cleanly", () => {
-    for (const national of [1, 151, 251, 252, 386]) {
-      expect(internalToNationalDex(nationalDexToInternal(national)!)).toBe(
-        national,
-      );
+  it("is a bijection over the whole National Dex", () => {
+    const seen = new Set<number>();
+    for (let national = 1; national <= 386; national += 1) {
+      const internal = nationalDexToInternal(national);
+      expect(internal, `national ${national}`).toBeDefined();
+      expect(internalToNationalDex(internal!)).toBe(national);
+      seen.add(internal!);
     }
+    expect(seen.size).toBe(386);
+  });
+});
+
+describe("evolution families", () => {
+  it("groups a linear chain under its base form", () => {
+    expect(familyOf(1)).toBe(1); // Bulbasaur
+    expect(familyOf(2)).toBe(1);
+    expect(familyOf(3)).toBe(1);
+  });
+
+  it("groups branching evolutions", () => {
+    // Eeveelutions all belong to Eevee.
+    for (const dex of [134, 135, 136, 196, 197]) expect(familyOf(dex)).toBe(133);
+    // Gloom -> Vileplume and Gloom -> Bellossom both trace to Oddish.
+    expect(familyOf(45)).toBe(43);
+    expect(familyOf(182)).toBe(43);
+  });
+
+  it("groups Shedinja with Nincada", () => {
+    // Nincada's second evolution entry — easy to miss when parsing.
+    expect(familyOf(291)).toBe(290);
+    expect(familyOf(292)).toBe(290);
+  });
+
+  it("treats an evolution-less species as its own family", () => {
+    expect(familyOf(132)).toBe(132); // Ditto
+  });
+
+  it("never groups two unrelated species", () => {
+    expect(familyOf(252)).not.toBe(familyOf(255));
   });
 });
 
