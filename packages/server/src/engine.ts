@@ -295,6 +295,7 @@ export function toRunState(state: EngineState): RunState {
   return {
     runId: state.runId,
     joinCode: state.joinCode,
+    randomised: state.randomised,
     players: { a: state.snapshots.a, b: state.snapshots.b },
     pairs,
     warnings: checkClauses(pairs, state.familyOf),

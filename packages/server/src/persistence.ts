@@ -20,7 +20,8 @@ import type { PlayerId, PlayerSnapshot } from "@pokeshare/shared";
 import type { EncounterRecord, EngineState } from "./engine.js";
 import { createRun } from "./engine.js";
 
-const FORMAT_VERSION = 1;
+/** Bumped to 2 when `randomised` was added; a v1 file lacks the clause mode. */
+const FORMAT_VERSION = 2;
 
 interface StoredRoute {
   readonly route: string;
@@ -34,6 +35,7 @@ interface StoredRun {
   readonly version: number;
   readonly runId: string;
   readonly joinCode: string;
+  readonly randomised: boolean;
   readonly snapshots: Record<PlayerId, PlayerSnapshot | undefined>;
   readonly routes: readonly StoredRoute[];
   readonly seenPids: Record<PlayerId, number[]>;
@@ -45,6 +47,7 @@ export function serialise(state: EngineState): StoredRun {
     version: FORMAT_VERSION,
     runId: state.runId,
     joinCode: state.joinCode,
+    randomised: state.randomised,
     snapshots: { a: state.snapshots.a, b: state.snapshots.b },
     routes: [...state.routes].map(([route, entry]) => ({
       route,
@@ -71,7 +74,9 @@ export function deserialise(stored: StoredRun): EngineState {
     );
   }
 
-  const state = createRun(stored.runId, stored.joinCode);
+  // Passing `randomised` here is what re-selects the clause resolver; dropping
+  // it would silently switch a randomised run back to vanilla families.
+  const state = createRun(stored.runId, stored.joinCode, stored.randomised);
   state.snapshots.a = stored.snapshots.a;
   state.snapshots.b = stored.snapshots.b;
 

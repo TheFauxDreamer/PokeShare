@@ -37,6 +37,7 @@ export type SignalHandler = (
 export function useRun(
   joinCode: string | undefined,
   onSignal?: SignalHandler,
+  options: { readonly randomised?: boolean } = {},
 ): RunConnection {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [state, setState] = useState<RunState | undefined>();
@@ -46,6 +47,9 @@ export function useRun(
   const clientRef = useRef<RunClient | undefined>(undefined);
   const signalRef = useRef<SignalHandler | undefined>(onSignal);
   signalRef.current = onSignal;
+  // Read at connect time only; changing it later must not reconnect.
+  const randomisedRef = useRef(options.randomised ?? false);
+  randomisedRef.current = options.randomised ?? false;
 
   useEffect(() => {
     const client = new RunClient({
@@ -54,7 +58,7 @@ export function useRun(
       hello: () =>
         joinCode
           ? { type: "join_run", joinCode }
-          : { type: "create_run" },
+          : { type: "create_run", randomised: randomisedRef.current },
       onMessage: (message: ServerMessage) => {
         switch (message.type) {
           case "run_created":

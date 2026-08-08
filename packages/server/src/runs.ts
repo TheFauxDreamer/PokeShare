@@ -38,12 +38,16 @@ export class RunRegistry {
   private readonly byId = new Map<string, Run>();
   private readonly byJoinCode = new Map<string, string>();
 
-  create(): Run {
+  /** @param randomised both players are on UPR-ZX ROMs; see createRun. */
+  create(randomised = false): Run {
     let joinCode = randomCode();
     while (this.byJoinCode.has(joinCode)) joinCode = randomCode();
 
     const runId = globalThis.crypto.randomUUID();
-    const run: Run = { state: createRun(runId, joinCode), seats: new Map() };
+    const run: Run = {
+      state: createRun(runId, joinCode, randomised),
+      seats: new Map(),
+    };
 
     this.byId.set(runId, run);
     this.byJoinCode.set(joinCode, runId);

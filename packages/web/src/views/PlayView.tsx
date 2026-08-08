@@ -7,6 +7,47 @@ import { useRun } from "../lib/useRun.js";
 import { publishCanvas } from "../lib/video.js";
 
 /**
+ * Run setup, shown only to the player creating a run.
+ *
+ * This exists because `create_run` is sent the instant the socket opens, so
+ * anything that configures the run has to be decided *before* connecting.
+ * Joining players skip it — the setting belongs to the run, not the player.
+ */
+function RunSetup({ onStart }: { onStart: (randomised: boolean) => void }) {
+  const [randomised, setRandomised] = useState(false);
+
+  return (
+    <div className="landing">
+      <h1>Start a Soul Link run</h1>
+      <p>
+        You will get a join code to send your partner. Both of you load your own
+        ROM; nothing is uploaded.
+      </p>
+
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={randomised}
+          onChange={(event) => setRandomised(event.target.checked)}
+        />
+        <span>
+          <strong>Randomised ROMs</strong>
+          <small>
+            Randomisers rewrite evolutions, so the dupes and species clauses
+            compare exact species instead of evolution families. Leave off for
+            vanilla Ruby/Sapphire/Emerald/FireRed/LeafGreen.
+          </small>
+        </span>
+      </label>
+
+      <button type="button" onClick={() => onStart(randomised)}>
+        Create run
+      </button>
+    </div>
+  );
+}
+
+/**
  * Where a player actually plays.
  *
  * Owns the emulator, the 4 Hz poll loop, and the outgoing video publish. Sends
@@ -14,6 +55,24 @@ import { publishCanvas } from "../lib/video.js";
  * generates almost no traffic.
  */
 export function PlayView({ joinCode }: { joinCode: string | undefined }) {
+  // Joining players connect straight away; creators choose settings first.
+  const [randomised, setRandomised] = useState<boolean | undefined>(
+    joinCode ? false : undefined,
+  );
+
+  if (randomised === undefined) {
+    return <RunSetup onStart={setRandomised} />;
+  }
+  return <ConnectedPlayView joinCode={joinCode} randomised={randomised} />;
+}
+
+function ConnectedPlayView({
+  joinCode,
+  randomised,
+}: {
+  joinCode: string | undefined;
+  randomised: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const emulatorRef = useRef<Emulator | undefined>(undefined);
   const lastDigest = useRef<string | undefined>(undefined);
@@ -24,9 +83,11 @@ export function PlayView({ joinCode }: { joinCode: string | undefined }) {
 
   // Hand incoming offers/ICE to the publisher. Without this the stream view
   // never gets a picture, because the publisher only ever answers.
-  const run = useRun(joinCode, (from, payload) => {
-    publisher.current?.accept(from, payload);
-  });
+  const run = useRun(
+    joinCode,
+    (from, payload) => publisher.current?.accept(from, payload),
+    { randomised },
+  );
   const player: PlayerId = run.player ?? "a";
 
   const loadRom = useCallback(async (file: File) => {
@@ -86,6 +147,7 @@ export function PlayView({ joinCode }: { joinCode: string | undefined }) {
               Join code <strong>{state.joinCode}</strong>
             </span>
           ) : null}
+          {state?.randomised ? <span className="tag">Randomised</span> : null}
           <span>Player {player.toUpperCase()}</span>
         </div>
       </header>

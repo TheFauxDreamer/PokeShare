@@ -221,6 +221,30 @@ button.confirm { border-color: var(--dead); color: var(--dead); }
 .fainted { color: var(--dead); }
 .empty { text-align: center; color: var(--muted); padding: 24px; }
 
+.tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--a) 22%, transparent);
+  color: var(--a);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.check {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  margin: 20px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.check input { margin-top: 3px; }
+.check strong { display: block; }
+.check small { display: block; color: var(--muted); margin-top: 4px; }
+
 /* --------------------------------------------------------------- landing */
 
 .landing { max-width: 640px; margin: 80px auto; padding: 16px; }

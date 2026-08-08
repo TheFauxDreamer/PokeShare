@@ -256,6 +256,41 @@ describe("manual re-pairing", () => {
   });
 });
 
+describe("randomised runs", () => {
+  /** Zigzagoon (263) and Linoone (264) are one family in vanilla. */
+  function runWithFamilyDupe(randomised: boolean) {
+    const state = createRun("run1", "K7QP2M", randomised);
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 263)]));
+    applySnapshot(state, snap("a", "Route 104", [mon(1, 263), mon(2, 264)]));
+    return state;
+  }
+
+  it("groups evolution families by default", () => {
+    const warnings = toRunState(runWithFamilyDupe(false)).warnings;
+    expect(warnings.filter((w) => w.kind === "dupes")).toHaveLength(1);
+  });
+
+  it("falls back to exact species when randomised", () => {
+    // A randomiser rewrites evolutions, so Linoone may not follow Zigzagoon.
+    const warnings = toRunState(runWithFamilyDupe(true)).warnings;
+    expect(warnings.filter((w) => w.kind === "dupes")).toHaveLength(0);
+  });
+
+  it("still flags an exact-species dupe when randomised", () => {
+    const state = createRun("run1", "K7QP2M", true);
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 263)]));
+    applySnapshot(state, snap("a", "Route 104", [mon(1, 263), mon(2, 263)]));
+    expect(
+      toRunState(state).warnings.filter((w) => w.kind === "dupes"),
+    ).toHaveLength(1);
+  });
+
+  it("reports the flag in run state", () => {
+    expect(toRunState(createRun("r", "C", true)).randomised).toBe(true);
+    expect(toRunState(createRun("r", "C")).randomised).toBe(false);
+  });
+});
+
 describe("level cap", () => {
   it("follows whichever player has more badges", () => {
     const state = newRun();

@@ -83,6 +83,12 @@ export interface ClauseWarning {
 export interface RunState {
   readonly runId: string;
   readonly joinCode: string;
+  /**
+   * True when both players are on UPR-ZX randomised ROMs. Randomisers rewrite
+   * the evolution table, so the bundled vanilla families no longer apply and
+   * the clauses fall back to exact-species matching.
+   */
+  readonly randomised: boolean;
   readonly players: Readonly<Record<PlayerId, PlayerSnapshot | undefined>>;
   readonly pairs: readonly SoulLinkPair[];
   readonly warnings: readonly ClauseWarning[];
@@ -94,7 +100,7 @@ export interface RunState {
 /* ---------------------------------------------------------------- messages */
 
 export type ClientMessage =
-  | { readonly type: "create_run" }
+  | { readonly type: "create_run"; readonly randomised?: boolean }
   | { readonly type: "join_run"; readonly joinCode: string }
   | { readonly type: "snapshot"; readonly snapshot: PlayerSnapshot }
   /** Operator confirms a detected faint; cascades to the linked partner. */

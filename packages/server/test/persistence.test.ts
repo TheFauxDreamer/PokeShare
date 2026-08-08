@@ -109,6 +109,24 @@ describe("round-tripping a run", () => {
     expect(events.some((e) => e.type === "death_pending")).toBe(false);
   });
 
+  it("keeps a randomised run randomised", async () => {
+    // Dropping this flag would silently switch the clauses back to vanilla
+    // evolution families, which are wrong for a randomised ROM.
+    const state = createRun("run-r", "AAAAAA", true);
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 263)]));
+    applySnapshot(state, snap("a", "Route 104", [mon(1, 263), mon(2, 264)]));
+
+    await saveRun(directory, state);
+    const restored = (await loadRun(directory, "run-r"))!;
+
+    expect(restored.randomised).toBe(true);
+    expect(toRunState(restored).randomised).toBe(true);
+    // Exact-species matching survives the round trip: 263/264 is not a dupe.
+    expect(
+      toRunState(restored).warnings.filter((w) => w.kind === "dupes"),
+    ).toHaveLength(0);
+  });
+
   it("rejects an unknown format version", () => {
     const stored = { ...serialise(busyRun()), version: 99 };
     expect(() => deserialise(stored)).toThrow(/format/i);

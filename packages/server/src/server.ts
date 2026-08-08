@@ -96,7 +96,7 @@ export function createPokeShareServer(
   function handle(client: Client, message: ClientMessage): void {
     switch (message.type) {
       case "create_run": {
-        const run = registry.create();
+        const run = registry.create(message.randomised ?? false);
         client.run = run;
         client.player = registry.seat(run, client.token);
         send(client.socket, {

@@ -141,6 +141,20 @@ describe("linking two games over websockets", () => {
     b.close();
   });
 
+  it("carries the randomised flag from create through to run state", async () => {
+    const a = await TestClient.connect();
+    a.send({ type: "create_run", randomised: true });
+    await a.next("run_created");
+    expect((await a.next("state")).state.randomised).toBe(true);
+    a.close();
+
+    const b = await TestClient.connect();
+    b.send({ type: "create_run" });
+    await b.next("run_created");
+    expect((await b.next("state")).state.randomised).toBe(false);
+    b.close();
+  });
+
   it("accepts a lowercase join code", async () => {
     const a = await TestClient.connect();
     a.send({ type: "create_run" });

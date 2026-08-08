@@ -31,6 +31,7 @@ export function PairsView({ joinCode }: { joinCode: string | undefined }) {
         <div className="pairs__meta">
           <span className={`status status--${run.status}`}>{run.status}</span>
           {state ? <span>Join code {state.joinCode}</span> : null}
+          {state?.randomised ? <span className="tag">Randomised</span> : null}
           <span>Deaths: {state?.deaths ?? 0}</span>
           <span>Level cap: {state?.levelCap ?? "—"}</span>
         </div>
