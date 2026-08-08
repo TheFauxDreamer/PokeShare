@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  displayName,
   levelCapForBadges,
   type PlayerId,
   type PlayerSnapshot,
 } from "@pokeshare/shared";
 import { TeamStrip } from "../components/TeamStrip.js";
 import { ControlsPanel } from "../components/ControlsPanel.js";
+import { RunBar } from "../components/RunBar.js";
+import { EncounterOverlay } from "../components/EncounterOverlay.js";
+import { normaliseJoinCode, rememberRunInUrl } from "../lib/links.js";
+import { loadPlayerName, savePlayerName } from "../lib/playerName.js";
 import { createEmulator, POLL_INTERVAL_MS, type Emulator } from "../lib/emulator.js";
 import {
   FAST_FORWARD_CODES,
@@ -15,6 +20,7 @@ import {
   type Bindings,
 } from "../lib/input.js";
 import { useFastForward } from "../lib/useFastForward.js";
+import { useGameInput } from "../lib/useGameInput.js";
 import { snapshotDigest, toPlayerSnapshot } from "../lib/snapshot.js";
 import { useRun } from "../lib/useRun.js";
 import { publishCanvas } from "../lib/video.js";
@@ -26,12 +32,51 @@ import { publishCanvas } from "../lib/video.js";
  * anything that configures the run has to be decided *before* connecting.
  * Joining players skip it — the setting belongs to the run, not the player.
  */
-function RunSetup({ onStart }: { onStart: (randomised: boolean) => void }) {
+function RunSetup({
+  onCreate,
+  onJoin,
+}: {
+  onCreate: (randomised: boolean) => void;
+  onJoin: (code: string) => void;
+}) {
   const [randomised, setRandomised] = useState(false);
+  const [code, setCode] = useState("");
+  const normalised = normaliseJoinCode(code);
 
   return (
     <div className="landing">
-      <h1>Start a Soul Link run</h1>
+      <h1>Soul Link</h1>
+
+      <section className="setup">
+        <h2>Join your partner's run</h2>
+        <p>Enter the code they gave you.</p>
+        <form
+          className="join"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!normalised) return;
+            rememberRunInUrl(normalised);
+            onJoin(normalised);
+          }}
+        >
+          <input
+            className="join__code"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder="K7QP2M"
+            aria-label="Join code"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={12}
+          />
+          <button type="submit" disabled={!normalised}>
+            Join
+          </button>
+        </form>
+      </section>
+
+      <h2>…or start a new run</h2>
       <p>
         You will get a join code to send your partner. Both of you load your own
         ROM; nothing is uploaded.
@@ -53,7 +98,7 @@ function RunSetup({ onStart }: { onStart: (randomised: boolean) => void }) {
         </span>
       </label>
 
-      <button type="button" onClick={() => onStart(randomised)}>
+      <button type="button" onClick={() => onCreate(randomised)}>
         Create run
       </button>
     </div>
@@ -68,15 +113,27 @@ function RunSetup({ onStart }: { onStart: (randomised: boolean) => void }) {
  * generates almost no traffic.
  */
 export function PlayView({ joinCode }: { joinCode: string | undefined }) {
-  // Joining players connect straight away; creators choose settings first.
-  const [randomised, setRandomised] = useState<boolean | undefined>(
-    joinCode ? false : undefined,
-  );
+  /**
+   * Undefined until the run is chosen. A code in the URL skips the setup step;
+   * otherwise the player either joins with a code or creates a run, and the
+   * `randomised` flag has to be settled *before* connecting because
+   * `create_run` is sent the moment the socket opens.
+   */
+  const [config, setConfig] = useState<
+    { code: string | undefined; randomised: boolean } | undefined
+  >(joinCode ? { code: joinCode, randomised: false } : undefined);
 
-  if (randomised === undefined) {
-    return <RunSetup onStart={setRandomised} />;
+  if (!config) {
+    return (
+      <RunSetup
+        onCreate={(randomised) => setConfig({ code: undefined, randomised })}
+        onJoin={(code) => setConfig({ code, randomised: false })}
+      />
+    );
   }
-  return <ConnectedPlayView joinCode={joinCode} randomised={randomised} />;
+  return (
+    <ConnectedPlayView joinCode={config.code} randomised={config.randomised} />
+  );
 }
 
 function ConnectedPlayView({
@@ -98,7 +155,11 @@ function ConnectedPlayView({
   const [emulator, setEmulator] = useState<Emulator | undefined>();
   /** Latest local reading, so the team renders without a server. */
   const [local, setLocal] = useState<PlayerSnapshot | undefined>();
+  const [name, setName] = useState(() => loadPlayerName());
   const fastForward = useFastForward(emulator, FAST_FORWARD_CODES, multiplier);
+
+  // Focus-independent key forwarding; see useGameInput.
+  useGameInput(emulator, bindings, !!romName);
 
   // Push rebinds straight through; no reload needed.
   useEffect(() => {
@@ -113,6 +174,7 @@ function ConnectedPlayView({
     { randomised },
   );
   const player: PlayerId = run.player ?? "a";
+  const send = run.send;
 
   const loadRom = useCallback(async (file: File) => {
     const canvas = canvasRef.current;
@@ -148,7 +210,13 @@ function ConnectedPlayView({
         const observed = emulator.poll();
         if (!observed || !emulator.gameCode) return;
 
-        const snapshot = toPlayerSnapshot(observed, player, emulator.gameCode);
+        const snapshot = toPlayerSnapshot(
+          observed,
+          player,
+          emulator.gameCode,
+          Date.now(),
+          (id) => emulator.typesFor(id),
+        );
         const digest = snapshotDigest(snapshot);
         if (digest === lastDigest.current) return;
         lastDigest.current = digest;
@@ -157,7 +225,7 @@ function ConnectedPlayView({
         // team must stay on screen even if the server is down or reconnecting
         // -- a blip mid-stream should never blank it.
         setLocal(snapshot);
-        run.send({ type: "snapshot", snapshot });
+        send({ type: "snapshot", snapshot });
         setPollError(undefined);
       } catch (error) {
         setPollError(error instanceof Error ? error.message : String(error));
@@ -165,14 +233,16 @@ function ConnectedPlayView({
     }, POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [romName, player, run]);
+    // Depends on `run.send` (stable), never on `run` itself: `run` changes
+    // identity on every broadcast and would reset this timer each time.
+  }, [romName, player, run.send]);
 
   useEffect(() => () => publisher.current?.close(), []);
 
   const state = run.state;
   // Prefer the local reading: it is fresher than the server echo and survives
   // a disconnect. Fall back to server state before the first poll lands.
-  const mine = local ?? state?.players[player];
+  const mine = local ?? state?.players?.[player];
   const party = mine?.party ?? [];
 
   return (
@@ -181,15 +251,21 @@ function ConnectedPlayView({
         <h1>PokeShare</h1>
         <div className="play__meta">
           <span className={`status status--${run.status}`}>{run.status}</span>
-          {state ? (
-            <span className="joincode">
-              Join code <strong>{state.joinCode}</strong>
-            </span>
-          ) : null}
           {state?.randomised ? <span className="tag">Randomised</span> : null}
-          <span>Player {player.toUpperCase()}</span>
+          <span>{displayName(player, state?.names?.[player])}</span>
         </div>
       </header>
+
+      {state ? (
+        <RunBar
+          joinCode={state.joinCode}
+          name={name}
+          onNameChange={(next) => {
+            setName(next);
+            run.send({ type: "set_name", name: savePlayerName(next) });
+          }}
+        />
+      ) : null}
 
       {run.error ? <p className="error">{run.error}</p> : null}
       {pollError ? <p className="error">{pollError}</p> : null}
@@ -202,14 +278,17 @@ function ConnectedPlayView({
         </p>
       ) : null}
 
-      <canvas
-        ref={canvasRef}
-        className="play__canvas"
-        width={240}
-        height={160}
-        tabIndex={0}
-        onClick={activate}
-      />
+      <div className="screen-wrap">
+        <canvas
+          ref={canvasRef}
+          className="play__canvas"
+          width={240}
+          height={160}
+          tabIndex={0}
+          onClick={activate}
+        />
+        <EncounterOverlay advice={state?.advice?.[player]} />
+      </div>
       {romName ? (
         <>
           <p className="controls">{describeBindings(bindings)}</p>

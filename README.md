@@ -69,6 +69,9 @@ To regenerate the route tables from the pret decompilations:
 pnpm gen:mapsec  # needs python3
 ```
 
+Done with the project? [CLEANUP.md](CLEANUP.md) lists every folder this puts on
+your machine and what is safe to delete.
+
 ## ROMs
 
 You supply your own. ROMs are loaded from local disk into your own browser and

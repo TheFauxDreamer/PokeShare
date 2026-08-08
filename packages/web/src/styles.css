@@ -87,8 +87,41 @@ body {
   text-overflow: ellipsis;
 }
 .shiny { color: var(--warn); margin-left: 4px; }
+.slot__row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .slot__level { font-size: 12px; color: var(--muted); }
-.slot__level.over-cap { color: var(--warn); font-weight: 700; }
+
+/* Standard Pokemon type colours, so they read at a glance on stream. */
+.type {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #fff;
+  background: #777;
+}
+.type--normal   { background: #9fa19f; }
+.type--fighting { background: #ff8000; }
+.type--flying   { background: #81b9ef; color: #1a1a1a; }
+.type--poison   { background: #9141cb; }
+.type--ground   { background: #915121; }
+.type--rock     { background: #afa981; }
+.type--bug      { background: #91a119; }
+.type--ghost    { background: #704170; }
+.type--steel    { background: #60a1b8; }
+.type--fire     { background: #e62829; }
+.type--water    { background: #2980ef; }
+.type--grass    { background: #3fa129; }
+.type--electric { background: #fac000; color: #1a1a1a; }
+.type--psychic  { background: #ef4179; }
+.type--ice      { background: #3dcef3; color: #1a1a1a; }
+.type--dragon   { background: #5060e1; }
+.type--dark     { background: #50413f; }
+.type--mystery  { background: #444; }
+/* Over-levelling cannot be undone, so warn on approach, not just on breach. */
+.slot__level--near { color: var(--warn); font-weight: 700; }
+.slot__level--over { color: var(--dead); font-weight: 800; }
 .slot__hp-text { font-size: 11px; color: var(--muted); }
 .slot__link {
   position: absolute;
@@ -126,6 +159,50 @@ body {
   background: #000;
   border-radius: 8px;
 }
+
+.screen-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  margin: 16px auto;
+}
+.screen-wrap .play__canvas { margin: 0; }
+
+.encounter {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  max-width: 60%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 2px solid;
+  background: rgb(14 17 22 / 0.92);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "headline sprite" "detail sprite";
+  gap: 0 8px;
+  align-items: center;
+}
+.encounter--bad { border-color: var(--dead); }
+.encounter--good { border-color: var(--ok); }
+
+.encounter__headline {
+  grid-area: headline;
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.encounter--bad .encounter__headline { color: var(--dead); }
+.encounter--good .encounter__headline { color: var(--ok); }
+/* Headline spans both rows when there is no detail line (a clean catch). */
+.encounter:not(:has(.encounter__detail)) .encounter__headline {
+  grid-row: 1 / -1;
+}
+.encounter__detail { grid-area: detail; font-size: 11px; color: var(--muted); }
+.encounter__sprite { grid-area: sprite; width: 40px; height: 40px; image-rendering: pixelated; }
 
 .rom-picker {
   display: block;
@@ -286,6 +363,15 @@ button.confirm { border-color: var(--dead); color: var(--dead); }
 .pairs__table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 8px; border-bottom: 1px solid var(--line); }
 .pairs__table td { padding: 10px 8px; border-bottom: 1px solid var(--line); }
 .row__route { font-weight: 600; }
+.repair { display: inline-flex; gap: 6px; align-items: center; }
+.repair select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 6px;
+  max-width: 150px;
+}
 .row__actions { display: flex; gap: 8px; justify-content: flex-end; }
 .row--dead { opacity: 0.5; }
 .row--pending { background: color-mix(in srgb, var(--warn) 10%, transparent); }
@@ -319,7 +405,67 @@ button.confirm { border-color: var(--dead); color: var(--dead); }
 
 /* --------------------------------------------------------------- landing */
 
+.runbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin: 12px 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.runbar__code {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+}
+.runbar__code strong {
+  font: 700 18px/1 ui-monospace, monospace;
+  letter-spacing: 3px;
+}
+.runbar__label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.runbar__name { display: flex; align-items: center; gap: 6px; }
+.runbar__name input {
+  width: 140px;
+  padding: 5px 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.runbar__name input:focus { outline: none; border-color: var(--a); }
+.runbar__flash { color: var(--ok); font-size: 12px; min-width: 120px; }
+
+.join { display: flex; gap: 8px; margin: 12px 0 24px; }
+.join__code {
+  flex: 1;
+  max-width: 240px;
+  padding: 10px 12px;
+  font: 600 20px/1 ui-monospace, monospace;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.join__code:focus { outline: none; border-color: var(--a); }
+.join button { padding: 10px 20px; }
+.join button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.setup {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 28px;
+}
+.setup h2 { margin-top: 0; font-size: 16px; }
+
 .landing { max-width: 640px; margin: 80px auto; padding: 16px; }
+.landing h2 { font-size: 16px; }
 .landing h1 { margin-bottom: 4px; }
 .landing p { color: var(--muted); }
 .landing ul { line-height: 2; }

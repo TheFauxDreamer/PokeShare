@@ -115,6 +115,39 @@ export function codeToSdlKeyName(code: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Which GBA input a physical key maps to, or `undefined` if unbound.
+ *
+ * Used to drive the emulator directly rather than relying on its own SDL
+ * keyboard listener, which only fires when the canvas has focus. In Safari that
+ * focus is easily lost to any other control on the page.
+ */
+export function resolveInput(
+  bindings: Bindings,
+  code: string,
+): GbaInput | undefined {
+  const sdlKey = codeToSdlKeyName(code);
+  if (!sdlKey) return undefined;
+  return GBA_INPUTS.find((input) => bindings[input] === sdlKey);
+}
+
+/**
+ * Is the user typing into a field rather than playing?
+ *
+ * Game input is captured at the window so it works without canvas focus, which
+ * means it would otherwise swallow every keystroke aimed at a text box —
+ * X/Z/A/S and the arrows cover most of what you would type, and fast-forward
+ * takes Shift, so even capitals break.
+ */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  if (!element || typeof element.tagName !== "string") return false;
+
+  const tag = element.tagName.toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  return element.isContentEditable === true;
+}
+
 /** Minimal emulator surface this module needs. Keeps it unit-testable. */
 export interface BindableEmulator {
   bindKey(bindingName: string, inputName: string): void;

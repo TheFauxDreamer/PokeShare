@@ -3,7 +3,9 @@ dist/
 *.tsbuildinfo
 
 # Persisted run state — live game data, not source.
-data/
+# Leading slash matters: a bare `data/` also matches packages/data/, which
+# would silently untrack that whole package's sources.
+/data/
 .DS_Store
 .env
 .env.local

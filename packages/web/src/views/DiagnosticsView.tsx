@@ -14,6 +14,7 @@ import {
   type Bindings,
 } from "../lib/input.js";
 import { useFastForward } from "../lib/useFastForward.js";
+import { useGameInput } from "../lib/useGameInput.js";
 
 /**
  * The Phase 1 spike, as a page.
@@ -48,6 +49,9 @@ export function DiagnosticsView() {
   // there is a party to check.
   const fastForward = useFastForward(emulator, FAST_FORWARD_CODES, multiplier);
 
+  // Focus-independent key forwarding; see useGameInput.
+  useGameInput(emulator, bindings, !!romName);
+
   useEffect(() => {
     emulator?.setBindings(bindings);
   }, [emulator, bindings]);
@@ -66,7 +70,13 @@ export function DiagnosticsView() {
         const observed = emulator.poll();
         if (!observed || !emulator.gameCode) return;
 
-        const snapshot = toPlayerSnapshot(observed, "a", emulator.gameCode);
+        const snapshot = toPlayerSnapshot(
+          observed,
+          "a",
+          emulator.gameCode,
+          Date.now(),
+          (id) => emulator.typesFor(id),
+        );
         for (const member of snapshot.party) {
           const previous = lastHp.current.get(member.pid);
           lastHp.current.set(member.pid, member.currentHp);

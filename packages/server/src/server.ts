@@ -19,6 +19,7 @@ import {
   confirmDeath,
   pairsOf,
   repair,
+  setName,
   toRunState,
   voidRoute,
 } from "./engine.js";
@@ -148,6 +149,14 @@ export function createPokeShareServer(
             broadcastPending(client.run, event.route);
           }
         }
+        return;
+      }
+
+      case "set_name": {
+        // Trust the seat, not the payload, for whose name this is.
+        if (!client.run || !client.player) return;
+        setName(client.run.state, client.player, message.name);
+        broadcast(client.run);
         return;
       }
 

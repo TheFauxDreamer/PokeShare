@@ -16,6 +16,7 @@ import { layoutForGameCode, type GameLayout } from "@pokeshare/data";
 import {
   memoryFromSaveState,
   readSnapshot,
+  readSpeciesTypes,
   saveStateGameCode,
   type GameSnapshot,
 } from "@pokeshare/gba";
@@ -47,6 +48,8 @@ export interface Emulator {
   setBindings(bindings: Bindings): void;
   /** `1` is normal speed; higher is faster. */
   setSpeed(multiplier: number): void;
+  /** Elemental types for an internal species index, read from the ROM. */
+  typesFor(speciesInternal: number): string[];
   /** Current game state, or `undefined` before a ROM is running. */
   poll(): GameSnapshot | undefined;
   readonly layout: GameLayout | undefined;
@@ -85,6 +88,9 @@ export async function createEmulator(
 
   let layout: GameLayout | undefined;
   let gameCode: string | undefined;
+  // The cartridge itself, kept because save states contain no ROM and the
+  // base-stats table (types) lives there.
+  let rom: Uint8Array | undefined;
 
   return {
     module,
@@ -93,6 +99,7 @@ export async function createEmulator(
       await new Promise<void>((resolve) => {
         module.uploadRom(file, () => resolve());
       });
+      rom = new Uint8Array(await file.arrayBuffer());
 
       const romPath = `${module.filePaths().gamePath}/${file.name}`;
       // loadGame returns false rather than throwing, so an unchecked call
@@ -112,6 +119,11 @@ export async function createEmulator(
       // A new ROM may be a different game entirely.
       layout = undefined;
       gameCode = undefined;
+    },
+
+    typesFor(speciesInternal: number) {
+      if (!rom || !layout) return [];
+      return readSpeciesTypes(rom, layout, speciesInternal);
     },
 
     setBindings(bindings: Bindings) {

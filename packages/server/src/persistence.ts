@@ -21,11 +21,12 @@ import type { EncounterRecord, EngineState } from "./engine.js";
 import { createRun } from "./engine.js";
 
 /**
- * 2 added `randomised` (clause mode); 3 added `seats` (player identity).
+ * 2 added `randomised` (clause mode); 3 added `seats` (player identity);
+ * 4 added `names`.
  * Both change meaning rather than just shape, so an older file is rejected
  * rather than loaded with a silently wrong default.
  */
-const FORMAT_VERSION = 3;
+const FORMAT_VERSION = 4;
 
 interface StoredRoute {
   readonly route: string;
@@ -42,6 +43,7 @@ interface StoredRun {
   readonly randomised: boolean;
   /** Player slot -> owning client id, so a restart preserves who is who. */
   readonly seats: [PlayerId, string][];
+  readonly names: Record<PlayerId, string | undefined>;
   readonly snapshots: Record<PlayerId, PlayerSnapshot | undefined>;
   readonly routes: readonly StoredRoute[];
   readonly seenPids: Record<PlayerId, number[]>;
@@ -55,6 +57,7 @@ export function serialise(state: EngineState): StoredRun {
     joinCode: state.joinCode,
     randomised: state.randomised,
     seats: [...state.seats],
+    names: { a: state.names.a, b: state.names.b },
     snapshots: { a: state.snapshots.a, b: state.snapshots.b },
     routes: [...state.routes].map(([route, entry]) => ({
       route,
@@ -87,6 +90,8 @@ export function deserialise(stored: StoredRun): EngineState {
   state.snapshots.a = stored.snapshots.a;
   state.snapshots.b = stored.snapshots.b;
   for (const [player, clientId] of stored.seats) state.seats.set(player, clientId);
+  state.names.a = stored.names.a;
+  state.names.b = stored.names.b;
 
   for (const entry of stored.routes) {
     state.routes.set(entry.route, {

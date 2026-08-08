@@ -20,11 +20,15 @@
 import {
   exactSpecies,
   familyOf as vanillaFamilyOf,
+  layoutForGameCode,
+  levelCapFor,
 } from "@pokeshare/data";
 import {
   type ClientId,
-  levelCapForBadges,
+  normalisePlayerName,
   type ClauseWarning,
+  type EncounterAdvice,
+  type EncounterVerdict,
   type PairMember,
   type PairStatus,
   type PartyMemberState,
@@ -74,6 +78,8 @@ export interface EngineState {
    * it survives both a reconnect and a server restart.
    */
   readonly seats: Map<PlayerId, ClientId>;
+  /** Display names, chosen by the players themselves. */
+  readonly names: Record<PlayerId, string | undefined>;
 }
 
 export type EngineEvent =
@@ -113,7 +119,18 @@ function buildRun(
     familyOf,
     randomised,
     seats: new Map(),
+    names: { a: undefined, b: undefined },
   };
+}
+
+/** Record a display name for a player. Empty clears it back to the default. */
+export function setName(
+  state: EngineState,
+  player: PlayerId,
+  name: string,
+): void {
+  const clean = normalisePlayerName(name);
+  state.names[player] = clean.length > 0 ? clean : undefined;
 }
 
 function entryFor(state: EngineState, route: string): RouteEntry {
@@ -134,6 +151,38 @@ function toRecord(member: PartyMemberState): EncounterRecord {
     fainted: member.currentHp === 0,
     dead: false,
   };
+}
+
+/** Has this player registered any encounter yet? */
+function hasAnyEncounter(state: EngineState, player: PlayerId): boolean {
+  for (const entry of state.routes.values()) {
+    if (entry[player]) return true;
+  }
+  return false;
+}
+
+/**
+ * Where an encounter should be recorded.
+ *
+ * Normally the route you are standing on — except for the starter. In
+ * Ruby/Sapphire/Emerald the bag opens while you are on Route 101, so the
+ * starter would eat that route's single encounter and leave you unable to
+ * catch anything there. Only the run's *first* catch is remapped, so a later
+ * genuine Route 101 encounter is unaffected.
+ */
+function locationFor(
+  state: EngineState,
+  player: PlayerId,
+  snapshot: PlayerSnapshot,
+): string | undefined {
+  const route = snapshot.route;
+  if (!route) return undefined;
+
+  const fix = layoutForGameCode(snapshot.gameCode)?.starterFix;
+  if (fix && route === fix.obtainedOn && !hasAnyEncounter(state, player)) {
+    return fix.recordAs;
+  }
+  return route;
 }
 
 /** Find the route a given PID was registered under, if any. */
@@ -169,14 +218,15 @@ export function applySnapshot(
     const isNew = !seen.has(member.pid);
     seen.add(member.pid);
 
-    // A brand-new party member on a known route is that route's encounter,
-    // unless the route already has one (only the first counts).
-    if (isNew && snapshot.route) {
-      const entry = entryFor(state, snapshot.route);
+    // A brand-new party member on a known location is that location's
+    // encounter, unless it already has one (only the first counts).
+    const location = isNew ? locationFor(state, player, snapshot) : undefined;
+    if (location) {
+      const entry = entryFor(state, location);
       if (!entry[player] && !entry.voided) {
         entry[player] = toRecord(member);
         if (entry.a && entry.b) {
-          events.push({ type: "pair_formed", route: snapshot.route });
+          events.push({ type: "pair_formed", route: location });
         }
       }
     }
@@ -286,10 +336,100 @@ export function pairsOf(state: EngineState): SoulLinkPair[] {
   }));
 }
 
-/** Highest badge count either player has reached drives the shared cap. */
+/**
+ * Highest badge count either player has reached drives the shared cap.
+ *
+ * Resolved through the game they are actually playing: the tables differ
+ * substantially, with FR/LG running up to ten levels ahead of Hoenn mid-game.
+ */
 function currentLevelCap(state: EngineState): number | undefined {
   const badges = PLAYERS.map((p) => state.snapshots[p]?.badges ?? 0);
-  return levelCapForBadges(Math.max(...badges));
+  const gameCode = state.snapshots.a?.gameCode ?? state.snapshots.b?.gameCode;
+  return levelCapFor(gameCode, Math.max(...badges));
+}
+
+/**
+ * Judge the wild Pokemon a player is currently facing.
+ *
+ * Checked in decisiveness order: a route that is already used or void settles
+ * the question regardless of species, then the dupes clause, then whether the
+ * link with the partner's catch would be legal.
+ *
+ * Returns `undefined` unless the player is actually in a wild battle.
+ */
+export function adviceFor(
+  state: EngineState,
+  player: PlayerId,
+): EncounterAdvice | undefined {
+  const snapshot = state.snapshots[player];
+  if (!snapshot?.inWildBattle) return undefined;
+
+  const route = snapshot.route;
+  const dex = snapshot.wildEncounterDex;
+  const entry = route ? state.routes.get(route) : undefined;
+
+  const advice = (
+    verdict: EncounterVerdict,
+    message: string,
+    rerollNeeded: boolean,
+    blocker?: EncounterRecord,
+  ): EncounterAdvice => ({
+    verdict,
+    nationalDex: dex,
+    blockerDex: blocker?.nationalDex,
+    blockerNickname: blocker?.nickname,
+    route,
+    message,
+    rerollNeeded,
+  });
+
+  if (entry?.voided) {
+    return advice("route_void", `${route} is marked as no encounter.`, true);
+  }
+  if (entry?.[player]) {
+    const mine = entry[player]!;
+    return advice(
+      "route_taken",
+      `You already caught ${mine.nickname} on ${route ?? "this route"}.`,
+      true,
+      mine,
+    );
+  }
+  if (dex === undefined) {
+    return advice("catchable", "Unknown species — no rule applies.", false);
+  }
+
+  const family = state.familyOf(dex);
+
+  // Dupes: same family already caught by this player anywhere in the run.
+  for (const [caughtRoute, candidate] of state.routes) {
+    const mine = candidate[player];
+    if (candidate.voided || !mine?.nationalDex) continue;
+    if (state.familyOf(mine.nationalDex) === family) {
+      return advice(
+        "dupe",
+        `Dupe — you already have ${mine.nickname} from ${caughtRoute}.`,
+        true,
+        mine,
+      );
+    }
+  }
+
+  // Species clause: the partner's catch on this route must be a different family.
+  const partner = player === "a" ? "b" : "a";
+  const theirs = entry?.[partner];
+  if (theirs?.nationalDex && state.familyOf(theirs.nationalDex) === family) {
+    return advice(
+      "species_clash",
+      `Same family as your partner's ${theirs.nickname} — the link would be illegal.`,
+      true,
+      theirs,
+    );
+  }
+
+  // No detail line: "Catch Available" already says everything, and an extra
+  // line of text over live gameplay is noise.
+  return advice("catchable", "", false);
 }
 
 export function warningsOf(state: EngineState): ClauseWarning[] {
@@ -304,8 +444,10 @@ export function toRunState(state: EngineState): RunState {
     joinCode: state.joinCode,
     randomised: state.randomised,
     players: { a: state.snapshots.a, b: state.snapshots.b },
+    names: { a: state.names.a, b: state.names.b },
     pairs,
     warnings: checkClauses(pairs, state.familyOf),
+    advice: { a: adviceFor(state, "a"), b: adviceFor(state, "b") },
     levelCap: currentLevelCap(state),
     deaths: pairs.filter((pair) => pair.status === "dead").length,
   };

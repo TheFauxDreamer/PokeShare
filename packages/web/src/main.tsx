@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { DiagnosticsView } from "./views/DiagnosticsView.js";
 import { PairsView } from "./views/PairsView.js";
 import { PlayView } from "./views/PlayView.js";
@@ -56,7 +57,9 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   );
 }

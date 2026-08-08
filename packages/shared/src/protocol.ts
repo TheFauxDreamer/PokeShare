@@ -22,6 +22,11 @@ export interface PartyMemberState {
   readonly status: number;
   readonly isEgg: boolean;
   readonly isShiny: boolean;
+  /**
+   * Elemental types, read from the ROM's base-stats table so they stay correct
+   * on randomised ROMs. Empty when the ROM has not been read.
+   */
+  readonly types: readonly string[];
 }
 
 /** One poll's worth of observed state. Sent only when it differs. */
@@ -74,6 +79,43 @@ export interface SoulLinkPair {
   readonly triggeredBy: PlayerId | undefined;
 }
 
+/**
+ * Verdict on the wild Pokemon currently on screen.
+ *
+ * Surfaced while the player is still in the encounter, because that is the only
+ * moment the answer is actionable: catch it, or run and re-roll.
+ */
+export type EncounterVerdict =
+  /** Nothing wrong with it. */
+  | "catchable"
+  /** This route's encounter is already used. */
+  | "route_taken"
+  /** The route was marked as having no valid encounter. */
+  | "route_void"
+  /** You already caught this evolutionary family. */
+  | "dupe"
+  /** Your partner's encounter here is the same family, so the link is illegal. */
+  | "species_clash";
+
+export interface EncounterAdvice {
+  readonly verdict: EncounterVerdict;
+  /** The wild Pokemon being faced. */
+  readonly nationalDex: number | undefined;
+  /**
+   * The already-caught Pokemon that makes this encounter illegal, if any.
+   *
+   * This is what the message names, and what the overlay shows: the wild one is
+   * already on screen behind the overlay, so its sprite adds nothing, whereas
+   * the blocker is the thing you cannot see.
+   */
+  readonly blockerDex: number | undefined;
+  readonly blockerNickname: string | undefined;
+  readonly route: string | undefined;
+  readonly message: string;
+  /** True when the run's rules say this one should be re-rolled. */
+  readonly rerollNeeded: boolean;
+}
+
 export interface ClauseWarning {
   readonly kind: "dupes" | "species";
   readonly route: string;
@@ -90,8 +132,12 @@ export interface RunState {
    */
   readonly randomised: boolean;
   readonly players: Readonly<Record<PlayerId, PlayerSnapshot | undefined>>;
+  /** Display names players chose for themselves; falls back to "Player A/B". */
+  readonly names: Readonly<Record<PlayerId, string | undefined>>;
   readonly pairs: readonly SoulLinkPair[];
   readonly warnings: readonly ClauseWarning[];
+  /** Live verdict per player, set only while that player is in a wild battle. */
+  readonly advice: Readonly<Record<PlayerId, EncounterAdvice | undefined>>;
   /** Highest level legal at the current badge count. */
   readonly levelCap: number | undefined;
   readonly deaths: number;
@@ -120,6 +166,8 @@ export type ClientMessage =
       readonly joinCode: string;
     }
   | { readonly type: "snapshot"; readonly snapshot: PlayerSnapshot }
+  /** Set this player's display name, shown on the stream and pairs views. */
+  | { readonly type: "set_name"; readonly name: string }
   /** Operator confirms a detected faint; cascades to the linked partner. */
   | { readonly type: "confirm_death"; readonly pairId: string }
   /** Operator marks a route as having no valid encounter for either player. */
@@ -143,6 +191,26 @@ export type ServerMessage =
   | { readonly type: "signal"; readonly from: PlayerId | "stream"; readonly payload: unknown }
   | { readonly type: "error"; readonly message: string };
 
+/**
+ * How close to the cap counts as a warning.
+ *
+ * Over-levelling is irreversible — you cannot un-gain experience — so the
+ * useful moment to say something is *before* it happens, not after.
+ */
+export const LEVEL_CAP_WARNING_MARGIN = 3;
+
+export type LevelCapStatus = "ok" | "near" | "over";
+
+export function levelCapStatus(
+  level: number,
+  cap: number | undefined,
+): LevelCapStatus {
+  if (cap === undefined) return "ok";
+  if (level > cap) return "over";
+  if (level > cap - LEVEL_CAP_WARNING_MARGIN) return "near";
+  return "ok";
+}
+
 /** Gym badges earned to level cap. Index is the badge count. */
 export const DEFAULT_LEVEL_CAPS: readonly number[] = [
   15, 19, 24, 29, 31, 33, 42, 46, 58,
@@ -150,4 +218,20 @@ export const DEFAULT_LEVEL_CAPS: readonly number[] = [
 
 export function levelCapForBadges(badges: number): number | undefined {
   return DEFAULT_LEVEL_CAPS[Math.min(badges, DEFAULT_LEVEL_CAPS.length - 1)];
+}
+
+/** Longest display name accepted, to keep the stream layout stable. */
+export const MAX_PLAYER_NAME = 20;
+
+/** Trim and clamp a player-supplied name; empty means "use the default". */
+export function normalisePlayerName(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim().slice(0, MAX_PLAYER_NAME);
+}
+
+/** What to show for a player, given whatever name they set. */
+export function displayName(
+  player: PlayerId,
+  name: string | undefined,
+): string {
+  return name && name.length > 0 ? name : `Player ${player.toUpperCase()}`;
 }

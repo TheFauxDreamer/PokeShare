@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ClientMessage,
   PlayerId,
@@ -8,6 +8,7 @@ import type {
 } from "@pokeshare/shared";
 import { RunClient, defaultSocketUrl, type ConnectionStatus } from "./client.js";
 import { getClientId } from "./clientId.js";
+import { loadPlayerName } from "./playerName.js";
 
 export interface RunConnection {
   readonly status: ConnectionStatus;
@@ -71,6 +72,12 @@ export function useRun(
           case "run_created":
             setPlayer(message.player);
             setError(undefined);
+            // Re-assert the name on every (re)connect: the server keys names to
+            // the seat, and a fresh run has none yet.
+            if (message.player) {
+              const stored = loadPlayerName();
+              if (stored) client.send({ type: "set_name", name: stored });
+            }
             return;
           case "state":
             setState(message.state);
@@ -111,15 +118,22 @@ export function useRun(
     };
   }, [joinCode]);
 
+  /**
+   * Stable across renders, deliberately.
+   *
+   * The connection object's identity changes on every server broadcast, so
+   * anything depending on it re-runs constantly. A poll loop keyed to it gets
+   * its timer cleared and restarted on each message — including messages caused
+   * by the *other* player — which can starve it of ever firing. Consumers
+   * should depend on `send`, not on the connection object.
+   */
+  const send = useCallback(
+    (message: ClientMessage) => clientRef.current?.send(message),
+    [],
+  );
+
   return useMemo(
-    () => ({
-      status,
-      state,
-      player,
-      pending,
-      error,
-      send: (message: ClientMessage) => clientRef.current?.send(message),
-    }),
-    [status, state, player, pending, error],
+    () => ({ status, state, player, pending, error, send }),
+    [status, state, player, pending, error, send],
   );
 }

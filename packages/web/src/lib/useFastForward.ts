@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Emulator } from "./emulator.js";
+import { isTypingTarget } from "./input.js";
 
 export interface FastForward {
   readonly active: boolean;
@@ -36,6 +37,8 @@ export function useFastForward(
     const onKeyDown = (event: KeyboardEvent) => {
       // Ignore auto-repeat, or holding the key would flicker on and off.
       if (!codes.includes(event.code) || event.repeat) return;
+      // Shift is also how you type a capital letter.
+      if (isTypingTarget(event.target)) return;
       event.preventDefault();
       toggle();
     };

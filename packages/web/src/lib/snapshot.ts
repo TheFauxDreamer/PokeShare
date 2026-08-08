@@ -13,6 +13,8 @@ export function toPlayerSnapshot(
   player: PlayerId,
   gameCode: string,
   observedAt = Date.now(),
+  /** Internal species index -> elemental types, read from the ROM. */
+  typesFor: (speciesInternal: number) => string[] = () => [],
 ): PlayerSnapshot {
   const party: PartyMemberState[] = snapshot.party.map((member) => ({
     pid: member.personality,
@@ -25,6 +27,7 @@ export function toPlayerSnapshot(
     status: member.status,
     isEgg: member.isEgg,
     isShiny: member.isShiny,
+    types: typesFor(member.speciesInternal),
   }));
 
   return {
@@ -49,7 +52,7 @@ export function snapshotDigest(snapshot: PlayerSnapshot): string {
   const party = snapshot.party
     .map(
       (m) =>
-        `${m.pid}:${m.slot}:${m.level}:${m.currentHp}:${m.maxHp}:${m.status}:${m.nickname}`,
+        `${m.pid}:${m.slot}:${m.level}:${m.currentHp}:${m.maxHp}:${m.status}:${m.nickname}:${m.types.join("/")}`,
     )
     .join("|");
   return [

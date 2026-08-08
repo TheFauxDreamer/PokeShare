@@ -58,7 +58,45 @@ export interface GameLayout {
    * reader must take 16 bits and shift.
    */
   readonly badgeBitOffset: number;
+  /**
+   * ROM address of gBaseStats (the per-species table). Read from the ROM file,
+   * not from RAM: a save state contains no ROM.
+   *
+   * NOTE these differ between siblings that share every RAM address --
+   * LeafGreen is not FireRed here, and Sapphire is not Ruby.
+   */
+  readonly baseStats: number;
+  /**
+   * Where the starter is handed over vs where the run should record it.
+   *
+   * In Ruby/Sapphire/Emerald you are standing on Route 101 when Birch's bag
+   * opens, so the starter would consume Route 101's one encounter and you could
+   * never catch a wild Pokemon there. Convention is to attribute the starter to
+   * the home town and leave the route free.
+   *
+   * Undefined for FR/LG, where the starter is handed over inside Oak's lab and
+   * the map section is already Pallet Town.
+   */
+  readonly starterFix?: {
+    readonly obtainedOn: string;
+    readonly recordAs: string;
+  };
+  /**
+   * Nuzlocke level cap by badge count: index 0 is "no badges yet", index 8 is
+   * post-eighth-badge. Each value is the ace level of the next boss, extracted
+   * from the pret decompilations' trainer party tables.
+   *
+   * These genuinely differ per game — FR/LG runs up to 10 levels ahead of
+   * Hoenn mid-game, and Ruby/Sapphire's eighth gym is Wallace (43) where
+   * Emerald's is Juan (46).
+   */
+  readonly levelCaps: readonly number[];
 }
+
+/** Bytes per entry in gBaseStats. */
+export const BASE_STATS_STRIDE = 0x1c;
+/** Offset of types[2] within a base-stats entry. */
+export const BASE_STATS_TYPES_OFFSET = 0x06;
 
 /** Offset of `regionMapSectionId` within struct MapHeader. */
 export const MAP_HEADER_REGION_MAPSEC_OFFSET = 0x14;
@@ -78,6 +116,10 @@ const EMERALD: GameLayout = {
   saveBlock1: { kind: "pointer", address: 0x03005d8c },
   badgeOffset: 0x137c,
   badgeBitOffset: 7,
+  baseStats: 0x083203cc,
+  starterFix: { obtainedOn: "Route 101", recordAs: "Littleroot Town" },
+  // Roxanne, Brawly, Wattson, Flannery, Norman, Winona, Tate&Liza, Juan, Wallace
+  levelCaps: [15, 19, 24, 29, 31, 33, 42, 46, 58],
 };
 
 const FIRERED: GameLayout = {
@@ -92,12 +134,17 @@ const FIRERED: GameLayout = {
   saveBlock1: { kind: "pointer", address: 0x03005008 },
   badgeOffset: 0xfe4,
   badgeBitOffset: 0,
+  baseStats: 0x082547f4,
+  // Brock, Misty, Lt Surge, Erika, Koga, Sabrina, Blaine, Giovanni, Blue
+  levelCaps: [14, 21, 24, 29, 43, 43, 47, 50, 63],
 };
 
 const LEAFGREEN: GameLayout = {
   ...FIRERED,
   code: "BPGE",
   name: "Pokémon LeafGreen",
+  // Shares FireRed's RAM layout but not its ROM data offsets.
+  baseStats: 0x082547d0,
 };
 
 const RUBY: GameLayout = {
@@ -112,12 +159,18 @@ const RUBY: GameLayout = {
   saveBlock1: { kind: "direct", address: 0x02025734 },
   badgeOffset: 0x1320,
   badgeBitOffset: 7,
+  baseStats: 0x081fec18,
+  starterFix: { obtainedOn: "Route 101", recordAs: "Littleroot Town" },
+  // Same leaders as Emerald but lower levels; eighth gym is Wallace, not Juan.
+  levelCaps: [15, 18, 23, 28, 31, 33, 42, 43, 58],
 };
 
 const SAPPHIRE: GameLayout = {
   ...RUBY,
   code: "AXPE",
   name: "Pokémon Sapphire",
+  // Shares Ruby's RAM layout but not its ROM data offsets.
+  baseStats: 0x081feba8,
 };
 
 export const GAME_LAYOUTS: readonly GameLayout[] = [
@@ -137,4 +190,20 @@ export const GAME_LAYOUTS: readonly GameLayout[] = [
  */
 export function layoutForGameCode(code: string): GameLayout | undefined {
   return GAME_LAYOUTS.find((layout) => layout.code === code);
+}
+
+/**
+ * Level cap for a badge count, for a given game.
+ *
+ * Falls back to Emerald's table for an unknown game code so a hack still gets
+ * plausible caps rather than none.
+ */
+export function levelCapFor(
+  gameCode: string | undefined,
+  badges: number,
+): number | undefined {
+  const caps =
+    (gameCode ? layoutForGameCode(gameCode)?.levelCaps : undefined) ??
+    EMERALD.levelCaps;
+  return caps[Math.min(Math.max(badges, 0), caps.length - 1)];
 }

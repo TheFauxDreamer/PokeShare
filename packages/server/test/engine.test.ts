@@ -28,6 +28,7 @@ function mon(
     status: 0,
     isEgg: false,
     isShiny: false,
+    types: [],
     ...overrides,
   };
 }

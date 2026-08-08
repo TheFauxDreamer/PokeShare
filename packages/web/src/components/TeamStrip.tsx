@@ -1,5 +1,11 @@
 import { useState } from "react";
-import type { PartyMemberState, SoulLinkPair } from "@pokeshare/shared";
+import {
+  LEVEL_CAP_WARNING_MARGIN,
+  levelCapStatus,
+  type LevelCapStatus,
+  type PartyMemberState,
+  type SoulLinkPair,
+} from "@pokeshare/shared";
 
 /**
  * Sprite by National Dex number, served from `public/sprites/<dex>.png`.
@@ -31,10 +37,11 @@ export interface SlotProps {
   readonly member: PartyMemberState | undefined;
   /** The pair this Pokemon belongs to, if it has been linked. */
   readonly pair: SoulLinkPair | undefined;
-  readonly overLevelCap: boolean;
+  readonly capStatus: LevelCapStatus;
+  readonly levelCap: number | undefined;
 }
 
-export function PartySlot({ member, pair, overLevelCap }: SlotProps) {
+export function PartySlot({ member, pair, capStatus, levelCap }: SlotProps) {
   if (!member) return <div className="slot slot--empty" />;
 
   const dead = pair?.status === "dead";
@@ -58,8 +65,25 @@ export function PartySlot({ member, pair, overLevelCap }: SlotProps) {
           {member.nickname}
           {member.isShiny ? <span className="shiny">★</span> : null}
         </div>
-        <div className={`slot__level ${overLevelCap ? "over-cap" : ""}`}>
-          Lv {member.level}
+        <div className="slot__row">
+          <span
+            className={`slot__level slot__level--${capStatus}`}
+            title={
+              capStatus === "over"
+                ? `Over the level cap of ${levelCap}`
+                : capStatus === "near"
+                  ? `Within ${LEVEL_CAP_WARNING_MARGIN} of the cap (${levelCap}) — stop training`
+                  : undefined
+            }
+          >
+            Lv {member.level}
+            {capStatus === "over" ? " ⚠" : capStatus === "near" ? " !" : ""}
+          </span>
+          {member.types.map((type) => (
+            <span key={type} className={`type type--${type.toLowerCase()}`}>
+              {type}
+            </span>
+          ))}
         </div>
         <div className="hp">
           <div className={`hp__fill hp__fill--${hpState}`} style={{ width: `${hpFraction * 100}%` }} />
@@ -98,11 +122,10 @@ export function TeamStrip({ party, pairs, player, levelCap }: TeamStripProps) {
             key={member?.pid ?? `empty-${index}`}
             member={member}
             pair={member ? pairByPid.get(member.pid) : undefined}
-            overLevelCap={
-              member !== undefined &&
-              levelCap !== undefined &&
-              member.level > levelCap
+            capStatus={
+              member ? levelCapStatus(member.level, levelCap) : "ok"
             }
+            levelCap={levelCap}
           />
         );
       })}

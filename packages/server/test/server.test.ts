@@ -99,6 +99,7 @@ function mon(pid: number, dex: number, hp = 20): PartyMemberState {
     status: 0,
     isEgg: false,
     isShiny: false,
+    types: [],
   };
 }
 

@@ -45,11 +45,26 @@ export function publishCanvas(
   const stream = canvas.captureStream(FRAME_RATE);
   const peers = new Map<string, RTCPeerConnection>();
 
-  function peerFor(key: string, to: PlayerId | "stream"): RTCPeerConnection {
-    let peer = peers.get(key);
-    if (peer) return peer;
+  /**
+   * @param fresh discard any existing peer for this key first.
+   *
+   * A new offer means the far side restarted negotiation — reusing the old
+   * connection would answer into a dead peer, so the stream view's retry would
+   * appear to do nothing.
+   */
+  function peerFor(
+    key: string,
+    to: PlayerId | "stream",
+    fresh = false,
+  ): RTCPeerConnection {
+    const existing = peers.get(key);
+    if (existing && !fresh) return existing;
+    if (existing) {
+      existing.close();
+      peers.delete(key);
+    }
 
-    peer = new RTCPeerConnection({ iceServers: iceServers() });
+    const peer = new RTCPeerConnection({ iceServers: iceServers() });
     for (const track of stream.getTracks()) peer.addTrack(track, stream);
     peer.addEventListener("icecandidate", (event) => {
       if (event.candidate) {
@@ -66,7 +81,8 @@ export function publishCanvas(
         sdp?: RTCSessionDescriptionInit;
         candidate?: RTCIceCandidateInit;
       };
-      const peer = peerFor(String(from), from);
+      // An offer starts a fresh negotiation; ICE candidates continue one.
+      const peer = peerFor(String(from), from, message.sdp?.type === "offer");
 
       if (message.sdp?.type === "offer") {
         void peer

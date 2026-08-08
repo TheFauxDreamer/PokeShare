@@ -6,6 +6,8 @@ import {
   codeToSdlKeyName,
   conflictFor,
   describeBindings,
+  isTypingTarget,
+  resolveInput,
   type Bindings,
 } from "../src/lib/input.js";
 
@@ -62,6 +64,69 @@ describe("applying bindings", () => {
     expect(emulator.bindKey).toHaveBeenCalledWith("X", "A");
     expect(emulator.bindKey).toHaveBeenCalledWith("Return", "Start");
     expect(emulator.bindKey).toHaveBeenCalledWith("Up", "Up");
+  });
+});
+
+describe("resolving a key press to a GBA input", () => {
+  it("maps the default layout", () => {
+    expect(resolveInput(DEFAULT_BINDINGS, "ArrowLeft")).toBe("Left");
+    expect(resolveInput(DEFAULT_BINDINGS, "ArrowUp")).toBe("Up");
+    expect(resolveInput(DEFAULT_BINDINGS, "KeyX")).toBe("A");
+    expect(resolveInput(DEFAULT_BINDINGS, "KeyZ")).toBe("B");
+    expect(resolveInput(DEFAULT_BINDINGS, "Enter")).toBe("Start");
+    expect(resolveInput(DEFAULT_BINDINGS, "Backspace")).toBe("Select");
+  });
+
+  it("returns undefined for unbound keys", () => {
+    expect(resolveInput(DEFAULT_BINDINGS, "KeyQ")).toBeUndefined();
+    expect(resolveInput(DEFAULT_BINDINGS, "MediaPlayPause")).toBeUndefined();
+  });
+
+  it("follows a rebind", () => {
+    const custom: Bindings = { ...DEFAULT_BINDINGS, A: "K" };
+    expect(resolveInput(custom, "KeyK")).toBe("A");
+    expect(resolveInput(custom, "KeyX")).toBeUndefined();
+  });
+
+  it("covers every input with the defaults", () => {
+    const reached = new Set(
+      GBA_INPUTS.map((input) => DEFAULT_BINDINGS[input]),
+    );
+    expect(reached.size).toBe(GBA_INPUTS.length);
+  });
+});
+
+/**
+ * Game keys are captured at the window so they work without canvas focus, which
+ * means they would otherwise eat every keystroke meant for a text field. X, Z,
+ * A and S alone cover a lot of ordinary typing, and fast-forward takes Shift,
+ * so even capitals would be impossible.
+ */
+describe("typing targets", () => {
+  const element = (tag: string, contentEditable = false) =>
+    ({ tagName: tag, isContentEditable: contentEditable }) as unknown as EventTarget;
+
+  it.each(["INPUT", "TEXTAREA", "SELECT"])("treats <%s> as typing", (tag) => {
+    expect(isTypingTarget(element(tag))).toBe(true);
+  });
+
+  it("handles lowercase tag names", () => {
+    expect(isTypingTarget(element("input"))).toBe(true);
+  });
+
+  it("treats contenteditable as typing", () => {
+    expect(isTypingTarget(element("DIV", true))).toBe(true);
+  });
+
+  it("does not treat the game canvas as typing", () => {
+    expect(isTypingTarget(element("CANVAS"))).toBe(false);
+    expect(isTypingTarget(element("BODY"))).toBe(false);
+    expect(isTypingTarget(element("BUTTON"))).toBe(false);
+  });
+
+  it("copes with no target at all", () => {
+    expect(isTypingTarget(null)).toBe(false);
+    expect(isTypingTarget({} as EventTarget)).toBe(false);
   });
 });
 
