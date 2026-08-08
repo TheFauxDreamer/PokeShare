@@ -10,7 +10,8 @@
     "paths": {
       "@pokeshare/data": ["./packages/data/src/index.ts"],
       "@pokeshare/gba": ["./packages/gba/src/index.ts"],
-      "@pokeshare/shared": ["./packages/shared/src/index.ts"]
+      "@pokeshare/shared": ["./packages/shared/src/index.ts"],
+      "@pokeshare/server": ["./packages/server/src/index.ts"]
     }
   },
   "include": ["packages/*/test/**/*.ts", "vitest.config.ts"]

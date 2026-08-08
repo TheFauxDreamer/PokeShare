@@ -26,8 +26,8 @@ not yet. Current state:
 |---|---|---|
 | `packages/data` | Per-version RAM layouts, route tables, species mapping | Written |
 | `packages/gba` | Gen 3 decrypt/parse, RAM location, save-state fallback | Written, untested against a real ROM |
-| `packages/shared` | Wire protocol between play view, server and displays | Types only |
-| `packages/server` | Run state, pairing, rules, WebRTC signalling | Not started |
+| `packages/shared` | Wire protocol between play view, server and displays | Written |
+| `packages/server` | Run state, route pairing, death cascade, clauses, signalling | Written and tested; state is in-memory only |
 | `packages/web` | The three views | Not started |
 
 ## Getting started
@@ -36,8 +36,9 @@ Requires Node 20+ and pnpm.
 
 ```bash
 pnpm install
-pnpm test        # unit tests: Gen 3 parsing, RAM location, save states
+pnpm test        # 69 tests: Gen 3 parsing, RAM location, rules engine, sockets
 pnpm typecheck
+pnpm dev:server  # http + ws on :8080, GET /health
 ```
 
 To regenerate the route tables from the pret decompilations:

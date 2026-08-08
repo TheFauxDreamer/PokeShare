@@ -11,6 +11,7 @@ export default defineConfig({
       "@pokeshare/data": pkg("data"),
       "@pokeshare/gba": pkg("gba"),
       "@pokeshare/shared": pkg("shared"),
+      "@pokeshare/server": pkg("server"),
     },
   },
   test: {
