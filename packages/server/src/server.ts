@@ -22,6 +22,7 @@ import {
   toRunState,
   voidRoute,
 } from "./engine.js";
+import { loadAllRuns, saveRun } from "./persistence.js";
 import { RunRegistry, type Run } from "./runs.js";
 
 /** Everything we track about one open socket. */
@@ -37,28 +38,49 @@ function send(socket: WebSocket, message: ServerMessage): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
 }
 
+export interface PokeShareServerOptions {
+  /**
+   * Directory to persist runs to. Omit to keep everything in memory, which is
+   * what the tests do.
+   */
+  readonly dataDir?: string;
+}
+
 export interface PokeShareServer {
   readonly http: Server;
   listen(port: number, host?: string): Promise<number>;
   close(): Promise<void>;
 }
 
-export function createPokeShareServer(): PokeShareServer {
+export function createPokeShareServer(
+  options: PokeShareServerOptions = {},
+): PokeShareServer {
   const app = Fastify({ logger: false });
   const registry = new RunRegistry();
   const clients = new Set<Client>();
+  const { dataDir } = options;
+
+  /**
+   * Fire-and-forget persist. A failed write must never break a live run, so
+   * errors are swallowed here rather than propagating into message handling.
+   */
+  function persist(run: Run): void {
+    if (!dataDir) return;
+    void saveRun(dataDir, run.state).catch(() => undefined);
+  }
 
   app.get("/health", async () => ({ ok: true }));
 
   // Share Fastify's own HTTP server so both protocols live on one port.
   const wss = new WebSocketServer({ server: app.server });
 
-  /** Push current run state to everyone watching that run. */
+  /** Push current run state to everyone watching that run, and persist it. */
   function broadcast(run: Run): void {
     const message: ServerMessage = { type: "state", state: toRunState(run.state) };
     for (const client of clients) {
       if (client.run === run) send(client.socket, message);
     }
+    persist(run);
   }
 
   function broadcastPending(run: Run, route: string): void {
@@ -224,6 +246,11 @@ export function createPokeShareServer(): PokeShareServer {
     http: app.server,
 
     async listen(port, host = "0.0.0.0") {
+      // Restore before accepting connections, so a reconnecting player finds
+      // their run already present rather than racing the load.
+      if (dataDir) {
+        for (const state of await loadAllRuns(dataDir)) registry.adopt(state);
+      }
       await app.listen({ port, host });
       const address = app.server.address();
       // Port 0 means "any free port", so report what was actually bound.

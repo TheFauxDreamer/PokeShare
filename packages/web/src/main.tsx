@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { DiagnosticsView } from "./views/DiagnosticsView.js";
 import { PairsView } from "./views/PairsView.js";
 import { PlayView } from "./views/PlayView.js";
 import { StreamView } from "./views/StreamView.js";
@@ -24,6 +25,8 @@ function App() {
       return <PairsView joinCode={joinCode ?? undefined} />;
     case "/play":
       return <PlayView joinCode={joinCode ?? undefined} />;
+    case "/diagnostics":
+      return <DiagnosticsView />;
     default:
       return (
         <div className="landing">
@@ -38,6 +41,10 @@ function App() {
             </li>
             <li>
               <a href="/pairs">/pairs</a> — every pair, status and route
+            </li>
+            <li>
+              <a href="/diagnostics">/diagnostics</a> — check the read path
+              against a real ROM
             </li>
           </ul>
         </div>

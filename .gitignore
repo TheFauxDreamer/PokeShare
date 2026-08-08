@@ -1,6 +1,9 @@
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Persisted run state — live game data, not source.
+data/
 .DS_Store
 .env
 .env.local

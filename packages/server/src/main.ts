@@ -1,7 +1,9 @@
 import { createPokeShareServer } from "./server.js";
 
 const port = Number(process.env["PORT"] ?? 8080);
-const server = createPokeShareServer();
+const server = createPokeShareServer({
+  dataDir: process.env["POKESHARE_DATA_DIR"] ?? "./data/runs",
+});
 
 const bound = await server.listen(port);
 process.stdout.write(`PokeShare server listening on :${bound}\n`);

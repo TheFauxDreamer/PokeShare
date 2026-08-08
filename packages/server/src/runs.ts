@@ -50,6 +50,19 @@ export class RunRegistry {
     return run;
   }
 
+  /** Register a run restored from disk. */
+  adopt(state: EngineState): Run {
+    const run: Run = { state, seats: new Map() };
+    this.byId.set(state.runId, run);
+    this.byJoinCode.set(state.joinCode, state.runId);
+    return run;
+  }
+
+  /** Every live run, for periodic persistence. */
+  all(): Run[] {
+    return [...this.byId.values()];
+  }
+
   byCode(joinCode: string): Run | undefined {
     const runId = this.byJoinCode.get(joinCode.toUpperCase());
     return runId === undefined ? undefined : this.byId.get(runId);

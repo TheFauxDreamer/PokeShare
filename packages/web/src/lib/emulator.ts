@@ -45,6 +45,30 @@ export interface Emulator {
   readonly gameCode: string | undefined;
 }
 
+/**
+ * Take a save state and return its raw bytes.
+ *
+ * The directory is listed rather than the filename being guessed, because the
+ * naming convention is mGBA's business and is not part of the documented API.
+ * Listing an in-memory FS directory is far cheaper than the serialise itself,
+ * so doing it every poll costs nothing and avoids a stale path when the player
+ * switches ROMs.
+ */
+export function readRawState(module: mGBAEmulator): Uint8Array | undefined {
+  const withSlot = module as WithSlotSave;
+  const saved =
+    withSlot._saveStateSlot?.(POLL_SLOT, SAVESTATE_FLAGS) ??
+    module.saveState(POLL_SLOT);
+  if (!saved) return undefined;
+
+  const directory = module.filePaths().saveStatePath;
+  const entries = module.FS.readdir(directory) as string[];
+  const match = entries.find((entry) => entry.endsWith(`.ss${POLL_SLOT}`));
+  if (!match) return undefined;
+
+  return module.FS.readFile(`${directory}/${match}`) as Uint8Array;
+}
+
 export async function createEmulator(
   canvas: HTMLCanvasElement,
 ): Promise<Emulator> {
@@ -53,17 +77,6 @@ export async function createEmulator(
 
   let layout: GameLayout | undefined;
   let gameCode: string | undefined;
-  let statePath: string | undefined;
-
-  /** Locate the file `saveState` just wrote, rather than guessing its name. */
-  function findStateFile(): string | undefined {
-    if (statePath) return statePath;
-    const directory = module.filePaths().saveStatePath;
-    const entries = module.FS.readdir(directory) as string[];
-    const match = entries.find((entry) => entry.endsWith(`.ss${POLL_SLOT}`));
-    if (match) statePath = `${directory}/${match}`;
-    return statePath;
-  }
 
   return {
     module,
@@ -73,23 +86,14 @@ export async function createEmulator(
         module.uploadRom(file, () => resolve());
       });
       module.loadGame(`${module.filePaths().gamePath}/${file.name}`);
-      // A new ROM means a new state file and possibly a different game.
-      statePath = undefined;
+      // A new ROM may be a different game entirely.
       layout = undefined;
       gameCode = undefined;
     },
 
     poll() {
-      const withSlot = module as WithSlotSave;
-      const saved =
-        withSlot._saveStateSlot?.(POLL_SLOT, SAVESTATE_FLAGS) ??
-        module.saveState(POLL_SLOT);
-      if (!saved) return undefined;
-
-      const path = findStateFile();
-      if (!path) return undefined;
-
-      const bytes = module.FS.readFile(path) as Uint8Array;
+      const bytes = readRawState(module);
+      if (!bytes) return undefined;
       const memory = memoryFromSaveState(bytes);
 
       if (!layout) {

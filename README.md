@@ -27,7 +27,7 @@ not yet. Current state:
 | `packages/data` | Per-version RAM layouts, route tables, species mapping | Written |
 | `packages/gba` | Gen 3 decrypt/parse, RAM location, save-state fallback | Written, untested against a real ROM |
 | `packages/shared` | Wire protocol between play view, server and displays | Written |
-| `packages/server` | Run state, route pairing, death cascade, clauses, signalling | Written and tested; state is in-memory only |
+| `packages/server` | Run state, route pairing, death cascade, clauses, signalling | Written and tested; runs persist across restarts |
 | `packages/web` | The three views, emulator wiring, WebRTC video | Written; builds and serves, untested against a real ROM |
 
 ## Getting started
@@ -47,6 +47,14 @@ pnpm --filter @pokeshare/web dev     # views on :5173
 
 Then open `/play`, pick your ROM, and share the join code. `/stream` is the OBS
 browser source (1920×1080); `/pairs` is the second screen.
+
+**Start at `/diagnostics`.** Nothing here has yet read a live game. That page
+loads a ROM and walks every link of the read path — state format, game code,
+party address, checksums, route, badges — reporting which one breaks and why.
+Run it before trusting a stream to any of this.
+
+Runs persist to `./data/runs` (`POKESHARE_DATA_DIR` to change), so restarting
+the server does not lose a run in progress.
 
 > **Cross-origin isolation is required.** The mGBA core is threaded and needs
 > `SharedArrayBuffer`, so every response must carry
