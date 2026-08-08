@@ -25,7 +25,7 @@ not yet. Current state:
 | Package | What it does | Status |
 |---|---|---|
 | `packages/data` | Per-version RAM layouts, route tables, species mapping | Written |
-| `packages/gba` | Gen 3 decrypt/parse, RAM location, save-state fallback | Written, untested against a real ROM |
+| `packages/gba` | Gen 3 decrypt/parse, RAM location, save-state reading | Verified against a real Emerald ROM |
 | `packages/shared` | Wire protocol between play view, server and displays | Written |
 | `packages/server` | Run state, route pairing, death cascade, clauses, signalling | Written and tested; runs persist across restarts |
 | `packages/web` | The three views, emulator wiring, WebRTC video | Written; builds and serves, untested against a real ROM |

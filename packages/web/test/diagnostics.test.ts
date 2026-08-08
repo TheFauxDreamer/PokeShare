@@ -40,7 +40,11 @@ function stateWithParty(options: { gameCode?: string; corrupt?: boolean } = {}) 
   for (let i = 0; i < 4; i += 1) {
     iwram[pointerOffset + i] = (saveBlock1 >>> (i * 8)) & 0xff;
   }
-  ewram[saveBlock1 - EWRAM_START + EMERALD.badgeOffset] = 0b11;
+  // Two badges, positioned at FLAG_BADGE01_GET's bit offset (7 on Emerald).
+  const badgeAt = saveBlock1 - EWRAM_START + EMERALD.badgeOffset;
+  const badgeValue = 0b11 << EMERALD.badgeBitOffset;
+  ewram[badgeAt] = badgeValue & 0xff;
+  ewram[badgeAt + 1] = (badgeValue >>> 8) & 0xff;
 
   return buildSaveState({ gameCode: options.gameCode ?? "BPEE", ewram, iwram });
 }

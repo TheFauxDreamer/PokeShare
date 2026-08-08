@@ -9,7 +9,7 @@
  * server currently loses a run.
  */
 
-import type { PlayerId } from "@pokeshare/shared";
+import type { ClientId, PlayerId } from "@pokeshare/shared";
 import { createRun, type EngineState } from "./engine.js";
 
 /**
@@ -22,8 +22,6 @@ const JOIN_CODE_LENGTH = 6;
 
 export interface Run {
   readonly state: EngineState;
-  /** Which player slots have been claimed. */
-  readonly seats: Map<PlayerId, symbol>;
 }
 
 function randomCode(): string {
@@ -44,10 +42,7 @@ export class RunRegistry {
     while (this.byJoinCode.has(joinCode)) joinCode = randomCode();
 
     const runId = globalThis.crypto.randomUUID();
-    const run: Run = {
-      state: createRun(runId, joinCode, randomised),
-      seats: new Map(),
-    };
+    const run: Run = { state: createRun(runId, joinCode, randomised) };
 
     this.byId.set(runId, run);
     this.byJoinCode.set(joinCode, runId);
@@ -56,7 +51,8 @@ export class RunRegistry {
 
   /** Register a run restored from disk. */
   adopt(state: EngineState): Run {
-    const run: Run = { state, seats: new Map() };
+    // Seats come back with the state, so a restored run keeps who was who.
+    const run: Run = { state };
     this.byId.set(state.runId, run);
     this.byJoinCode.set(state.joinCode, state.runId);
     return run;
@@ -77,28 +73,35 @@ export class RunRegistry {
   }
 
   /**
-   * Claim a player slot. Returns the assigned id, or `undefined` when both
-   * seats are already taken.
+   * Claim a player slot for a client, or return the one it already holds.
    *
-   * `token` identifies the connection so a reconnecting player reclaims their
-   * own seat instead of being handed the partner's.
+   * Returns `undefined` when both seats belong to other clients — that is a
+   * spectator (the /stream and /pairs views), not an error.
    */
-  seat(run: Run, token: symbol): PlayerId | undefined {
-    for (const [player, held] of run.seats) {
-      if (held === token) return player;
+  seat(run: Run, clientId: ClientId): PlayerId | undefined {
+    const seats = run.state.seats;
+    for (const [player, owner] of seats) {
+      if (owner === clientId) return player; // reclaim
     }
     for (const player of ["a", "b"] as const) {
-      if (!run.seats.has(player)) {
-        run.seats.set(player, token);
+      if (!seats.has(player)) {
+        seats.set(player, clientId);
         return player;
       }
     }
     return undefined;
   }
 
-  release(run: Run, token: symbol): void {
-    for (const [player, held] of run.seats) {
-      if (held === token) run.seats.delete(player);
+  /**
+   * Give up a seat explicitly.
+   *
+   * Deliberately NOT called on disconnect — see the note on {@link Run.seats}.
+   * It exists for the case where someone genuinely changes machines and needs
+   * to hand their slot over.
+   */
+  release(run: Run, clientId: ClientId): void {
+    for (const [player, owner] of run.state.seats) {
+      if (owner === clientId) run.state.seats.delete(player);
     }
   }
 }

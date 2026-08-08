@@ -22,6 +22,7 @@ import {
   familyOf as vanillaFamilyOf,
 } from "@pokeshare/data";
 import {
+  type ClientId,
   levelCapForBadges,
   type ClauseWarning,
   type PairMember,
@@ -68,6 +69,11 @@ export interface EngineState {
   readonly familyOf: FamilyResolver;
   /** True for a UPR-ZX ROM, where vanilla evolution families do not apply. */
   readonly randomised: boolean;
+  /**
+   * Player slot -> owning client. Part of run state, not connection state, so
+   * it survives both a reconnect and a server restart.
+   */
+  readonly seats: Map<PlayerId, ClientId>;
 }
 
 export type EngineEvent =
@@ -106,6 +112,7 @@ function buildRun(
     lastHp: { a: new Map(), b: new Map() },
     familyOf,
     randomised,
+    seats: new Map(),
   };
 }
 

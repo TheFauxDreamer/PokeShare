@@ -83,6 +83,10 @@ class TestClient {
   }
 }
 
+/** A fresh client identity, as a new browser would generate. */
+let idCounter = 0;
+const id = (): string => `client-${(idCounter += 1)}`;
+
 function mon(pid: number, dex: number, hp = 20): PartyMemberState {
   return {
     pid,
@@ -114,14 +118,14 @@ function snapshot(party: PartyMemberState[], route: string): PlayerSnapshot {
 describe("linking two games over websockets", () => {
   it("creates a run, joins it by code, and pairs encounters by route", async () => {
     const a = await TestClient.connect();
-    a.send({ type: "create_run" });
+    a.send({ type: "create_run", clientId: id() });
     const created = await a.next("run_created");
 
     expect(created.joinCode).toHaveLength(6);
     expect(created.player).toBe("a");
 
     const b = await TestClient.connect();
-    b.send({ type: "join_run", joinCode: created.joinCode });
+    b.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
     const joined = await b.next("run_created");
     expect(joined.player).toBe("b");
     expect(joined.runId).toBe(created.runId);
@@ -143,13 +147,13 @@ describe("linking two games over websockets", () => {
 
   it("carries the randomised flag from create through to run state", async () => {
     const a = await TestClient.connect();
-    a.send({ type: "create_run", randomised: true });
+    a.send({ type: "create_run", clientId: id(), randomised: true });
     await a.next("run_created");
     expect((await a.next("state")).state.randomised).toBe(true);
     a.close();
 
     const b = await TestClient.connect();
-    b.send({ type: "create_run" });
+    b.send({ type: "create_run", clientId: id() });
     await b.next("run_created");
     expect((await b.next("state")).state.randomised).toBe(false);
     b.close();
@@ -157,11 +161,11 @@ describe("linking two games over websockets", () => {
 
   it("accepts a lowercase join code", async () => {
     const a = await TestClient.connect();
-    a.send({ type: "create_run" });
+    a.send({ type: "create_run", clientId: id() });
     const created = await a.next("run_created");
 
     const b = await TestClient.connect();
-    b.send({ type: "join_run", joinCode: created.joinCode.toLowerCase() });
+    b.send({ type: "join_run", clientId: id(), joinCode: created.joinCode.toLowerCase() });
     expect((await b.next("run_created")).runId).toBe(created.runId);
 
     a.close();
@@ -170,23 +174,23 @@ describe("linking two games over websockets", () => {
 
   it("rejects an unknown join code", async () => {
     const client = await TestClient.connect();
-    client.send({ type: "join_run", joinCode: "ZZZZZZ" });
+    client.send({ type: "join_run", clientId: id(), joinCode: "ZZZZZZ" });
     expect((await client.next("error")).message).toMatch(/no such run/i);
     client.close();
   });
 
   it("prompts on a faint and cascades to the partner once confirmed", async () => {
     const a = await TestClient.connect();
-    a.send({ type: "create_run" });
+    a.send({ type: "create_run", clientId: id() });
     const created = await a.next("run_created");
 
     const b = await TestClient.connect();
-    b.send({ type: "join_run", joinCode: created.joinCode });
+    b.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
     await b.next("run_created");
 
     // A third connection stands in for the /stream or /pairs view.
     const viewer = await TestClient.connect();
-    viewer.send({ type: "join_run", joinCode: created.joinCode });
+    viewer.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
     await viewer.next("run_created");
 
     a.send({ type: "snapshot", snapshot: snapshot([mon(1, 252)], "Route 103") });
@@ -227,11 +231,11 @@ describe("linking two games over websockets", () => {
 
   it("relays webrtc signalling between peers without inspecting it", async () => {
     const a = await TestClient.connect();
-    a.send({ type: "create_run" });
+    a.send({ type: "create_run", clientId: id() });
     const created = await a.next("run_created");
 
     const b = await TestClient.connect();
-    b.send({ type: "join_run", joinCode: created.joinCode });
+    b.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
     await b.next("run_created");
 
     a.send({ type: "signal", to: "b", payload: { sdp: "offer-blob" } });
@@ -266,5 +270,133 @@ describe("linking two games over websockets", () => {
     client.sendRaw(JSON.stringify({ type: "nonsense" }));
     expect((await client.next("error")).message).toMatch(/unknown message type/i);
     client.close();
+  });
+
+  it("rejects a join with no client id", async () => {
+    const client = await TestClient.connect();
+    client.sendRaw(JSON.stringify({ type: "create_run" }));
+    expect((await client.next("error")).message).toMatch(/clientid/i);
+    client.close();
+  });
+});
+
+/**
+ * Seats must belong to the client, not the connection.
+ *
+ * The bug these cover: seats were keyed on a per-connection token and released
+ * on disconnect, so after a drop the first client back took whichever slot was
+ * free. Player A could return as player B, and A's party would then be recorded
+ * against B — silently, mid-run.
+ */
+describe("seat ownership across reconnects", () => {
+  it("returns a reconnecting player to the same seat", async () => {
+    const alice = id();
+    const a1 = await TestClient.connect();
+    a1.send({ type: "create_run", clientId: alice });
+    const created = await a1.next("run_created");
+    expect(created.player).toBe("a");
+
+    const bob = id();
+    const b1 = await TestClient.connect();
+    b1.send({ type: "join_run", clientId: bob, joinCode: created.joinCode });
+    expect((await b1.next("run_created")).player).toBe("b");
+
+    // Both drop.
+    a1.close();
+    b1.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Bob reconnects FIRST. Under the old behaviour he would take seat "a".
+    const b2 = await TestClient.connect();
+    b2.send({ type: "join_run", clientId: bob, joinCode: created.joinCode });
+    expect((await b2.next("run_created")).player).toBe("b");
+
+    const a2 = await TestClient.connect();
+    a2.send({ type: "join_run", clientId: alice, joinCode: created.joinCode });
+    expect((await a2.next("run_created")).player).toBe("a");
+
+    b2.close();
+    a2.close();
+  });
+
+  it("keeps a reconnected player's party on their own side", async () => {
+    const alice = id();
+    const bob = id();
+
+    const a1 = await TestClient.connect();
+    a1.send({ type: "create_run", clientId: alice });
+    const created = await a1.next("run_created");
+
+    const b1 = await TestClient.connect();
+    b1.send({ type: "join_run", clientId: bob, joinCode: created.joinCode });
+    await b1.next("run_created");
+
+    a1.send({ type: "snapshot", snapshot: snapshot([mon(1, 252)], "Route 103") });
+    await b1.next("state", (m) => m.state.pairs[0]?.a !== undefined);
+
+    a1.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Alice comes back and reports the same Pokemon.
+    const a2 = await TestClient.connect();
+    a2.send({ type: "join_run", clientId: alice, joinCode: created.joinCode });
+    await a2.next("run_created");
+    a2.send({ type: "snapshot", snapshot: snapshot([mon(1, 252)], "Route 103") });
+
+    const state = await a2.next("state", (m) => m.state.players.a !== undefined);
+    // Still on side A, and side B was never contaminated.
+    expect(state.state.players.a?.party[0]?.pid).toBe(1);
+    expect(state.state.players.b).toBeUndefined();
+    expect(state.state.pairs[0]?.b).toBeUndefined();
+
+    a2.close();
+    b1.close();
+  });
+
+  it("seats a third connection as a spectator, not as player a", async () => {
+    const a = await TestClient.connect();
+    a.send({ type: "create_run", clientId: id() });
+    const created = await a.next("run_created");
+
+    const b = await TestClient.connect();
+    b.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
+    await b.next("run_created");
+
+    const viewer = await TestClient.connect();
+    viewer.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
+    // Undefined, rather than being mislabelled as player "a".
+    expect((await viewer.next("run_created")).player).toBeUndefined();
+
+    a.close();
+    b.close();
+    viewer.close();
+  });
+
+  it("ignores snapshots from a spectator", async () => {
+    const a = await TestClient.connect();
+    a.send({ type: "create_run", clientId: id() });
+    const created = await a.next("run_created");
+
+    const b = await TestClient.connect();
+    b.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
+    await b.next("run_created");
+
+    const viewer = await TestClient.connect();
+    viewer.send({ type: "join_run", clientId: id(), joinCode: created.joinCode });
+    await viewer.next("run_created");
+
+    viewer.send({
+      type: "snapshot",
+      snapshot: snapshot([mon(99, 300)], "Route 110"),
+    });
+    a.send({ type: "snapshot", snapshot: snapshot([mon(1, 252)], "Route 103") });
+
+    const state = await a.next("state", (m) => m.state.pairs.length > 0);
+    // Only the real player's encounter was recorded.
+    expect(state.state.pairs.map((p) => p.route)).toEqual(["Route 103"]);
+
+    a.close();
+    b.close();
+    viewer.close();
   });
 });

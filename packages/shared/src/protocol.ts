@@ -99,9 +99,26 @@ export interface RunState {
 
 /* ---------------------------------------------------------------- messages */
 
+/**
+ * Stable per-browser identity, persisted client-side.
+ *
+ * Seats are bound to this rather than to a connection: a dropped socket, a page
+ * reload or a server restart must all return the same person to the same seat.
+ * Getting this wrong swaps the two players and misattributes a whole party.
+ */
+export type ClientId = string;
+
 export type ClientMessage =
-  | { readonly type: "create_run"; readonly randomised?: boolean }
-  | { readonly type: "join_run"; readonly joinCode: string }
+  | {
+      readonly type: "create_run";
+      readonly clientId: ClientId;
+      readonly randomised?: boolean;
+    }
+  | {
+      readonly type: "join_run";
+      readonly clientId: ClientId;
+      readonly joinCode: string;
+    }
   | { readonly type: "snapshot"; readonly snapshot: PlayerSnapshot }
   /** Operator confirms a detected faint; cascades to the linked partner. */
   | { readonly type: "confirm_death"; readonly pairId: string }
@@ -113,7 +130,13 @@ export type ClientMessage =
   | { readonly type: "signal"; readonly to: PlayerId | "stream"; readonly payload: unknown };
 
 export type ServerMessage =
-  | { readonly type: "run_created"; readonly runId: string; readonly joinCode: string; readonly player: PlayerId }
+  /** `player` is undefined for a spectator (both seats already claimed). */
+  | {
+      readonly type: "run_created";
+      readonly runId: string;
+      readonly joinCode: string;
+      readonly player: PlayerId | undefined;
+    }
   | { readonly type: "state"; readonly state: RunState }
   /** A faint needs operator confirmation before the cascade is applied. */
   | { readonly type: "death_pending"; readonly pair: SoulLinkPair }

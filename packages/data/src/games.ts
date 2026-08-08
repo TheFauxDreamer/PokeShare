@@ -42,8 +42,22 @@ export interface GameLayout {
   /** u32 bitfield describing the current battle (wild, trainer, double, ...). */
   readonly battleTypeFlags: number;
   readonly saveBlock1: SaveBlockRef;
-  /** Offset from SaveBlock1 to the byte whose 8 bits are the 8 gym badges. */
+  /** Offset from SaveBlock1 to the byte containing FLAG_BADGE01_GET. */
   readonly badgeOffset: number;
+  /**
+   * Bit position of FLAG_BADGE01_GET within that byte.
+   *
+   * Not always 0, and getting it wrong counts unrelated system flags as
+   * badges. Derived from the decomps:
+   *
+   *   Emerald  FLAG_BADGE01_GET = 0x860 + 0x7  = 0x867 -> byte 0x10C, bit 7
+   *   Ruby/Sap FLAG_BADGE01_GET = 0x800 + 0x07 = 0x807 -> byte 0x100, bit 7
+   *   FR/LG    FLAG_BADGE01_GET = 0x800 + 0x20 = 0x820 -> byte 0x104, bit 0
+   *
+   * With a bit offset of 7 the eight badge flags straddle two bytes, so the
+   * reader must take 16 bits and shift.
+   */
+  readonly badgeBitOffset: number;
 }
 
 /** Offset of `regionMapSectionId` within struct MapHeader. */
@@ -63,6 +77,7 @@ const EMERALD: GameLayout = {
   battleTypeFlags: 0x02022fec,
   saveBlock1: { kind: "pointer", address: 0x03005d8c },
   badgeOffset: 0x137c,
+  badgeBitOffset: 7,
 };
 
 const FIRERED: GameLayout = {
@@ -76,6 +91,7 @@ const FIRERED: GameLayout = {
   battleTypeFlags: 0x02022b4c,
   saveBlock1: { kind: "pointer", address: 0x03005008 },
   badgeOffset: 0xfe4,
+  badgeBitOffset: 0,
 };
 
 const LEAFGREEN: GameLayout = {
@@ -95,6 +111,7 @@ const RUBY: GameLayout = {
   battleTypeFlags: 0x020239f8,
   saveBlock1: { kind: "direct", address: 0x02025734 },
   badgeOffset: 0x1320,
+  badgeBitOffset: 7,
 };
 
 const SAPPHIRE: GameLayout = {

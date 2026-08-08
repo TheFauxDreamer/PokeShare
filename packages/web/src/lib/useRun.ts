@@ -7,6 +7,7 @@ import type {
   SoulLinkPair,
 } from "@pokeshare/shared";
 import { RunClient, defaultSocketUrl, type ConnectionStatus } from "./client.js";
+import { getClientId } from "./clientId.js";
 
 export interface RunConnection {
   readonly status: ConnectionStatus;
@@ -37,7 +38,7 @@ export type SignalHandler = (
 export function useRun(
   joinCode: string | undefined,
   onSignal?: SignalHandler,
-  options: { readonly randomised?: boolean } = {},
+  options: { readonly randomised?: boolean; readonly scope?: string } = {},
 ): RunConnection {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [state, setState] = useState<RunState | undefined>();
@@ -50,6 +51,8 @@ export function useRun(
   // Read at connect time only; changing it later must not reconnect.
   const randomisedRef = useRef(options.randomised ?? false);
   randomisedRef.current = options.randomised ?? false;
+  // Stable across reconnects, so `hello` reclaims the same seat every time.
+  const clientIdRef = useRef(getClientId(options.scope));
 
   useEffect(() => {
     const client = new RunClient({
@@ -57,8 +60,12 @@ export function useRun(
       onStatus: setStatus,
       hello: () =>
         joinCode
-          ? { type: "join_run", joinCode }
-          : { type: "create_run", randomised: randomisedRef.current },
+          ? { type: "join_run", joinCode, clientId: clientIdRef.current }
+          : {
+              type: "create_run",
+              clientId: clientIdRef.current,
+              randomised: randomisedRef.current,
+            },
       onMessage: (message: ServerMessage) => {
         switch (message.type) {
           case "run_created":

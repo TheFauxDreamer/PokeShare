@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlayerId } from "@pokeshare/shared";
+import {
+  levelCapForBadges,
+  type PlayerId,
+  type PlayerSnapshot,
+} from "@pokeshare/shared";
 import { TeamStrip } from "../components/TeamStrip.js";
+import { ControlsPanel } from "../components/ControlsPanel.js";
 import { createEmulator, POLL_INTERVAL_MS, type Emulator } from "../lib/emulator.js";
+import {
+  FAST_FORWARD_CODES,
+  DEFAULT_FAST_FORWARD_MULTIPLIER,
+  describeBindings,
+  loadBindings,
+  type Bindings,
+} from "../lib/input.js";
+import { useFastForward } from "../lib/useFastForward.js";
 import { snapshotDigest, toPlayerSnapshot } from "../lib/snapshot.js";
 import { useRun } from "../lib/useRun.js";
 import { publishCanvas } from "../lib/video.js";
@@ -80,6 +93,17 @@ function ConnectedPlayView({
 
   const [romName, setRomName] = useState<string | undefined>();
   const [pollError, setPollError] = useState<string | undefined>();
+  const [bindings, setBindings] = useState<Bindings>(() => loadBindings());
+  const [multiplier, setMultiplier] = useState(DEFAULT_FAST_FORWARD_MULTIPLIER);
+  const [emulator, setEmulator] = useState<Emulator | undefined>();
+  /** Latest local reading, so the team renders without a server. */
+  const [local, setLocal] = useState<PlayerSnapshot | undefined>();
+  const fastForward = useFastForward(emulator, FAST_FORWARD_CODES, multiplier);
+
+  // Push rebinds straight through; no reload needed.
+  useEffect(() => {
+    emulator?.setBindings(bindings);
+  }, [emulator, bindings]);
 
   // Hand incoming offers/ICE to the publisher. Without this the stream view
   // never gets a picture, because the publisher only ever answers.
@@ -97,11 +121,19 @@ function ConnectedPlayView({
     if (!emulatorRef.current) {
       emulatorRef.current = await createEmulator(canvas);
       publisher.current = publishCanvas(canvas, run.send);
+      setEmulator(emulatorRef.current);
     }
     await emulatorRef.current.loadRom(file);
     setRomName(file.name);
     lastDigest.current = undefined;
+    canvas.focus(); // keyboard events only reach a focused canvas
   }, [run.send]);
+
+  /** Browsers suspend audio until a gesture; clicking the canvas is one. */
+  const activate = useCallback(() => {
+    canvasRef.current?.focus();
+    emulatorRef.current?.module.resumeAudio();
+  }, []);
 
   // The poll loop. Deliberately interval-based rather than per-frame: 250 ms is
   // invisible on stream and keeps overhead near zero while OBS encodes.
@@ -119,8 +151,12 @@ function ConnectedPlayView({
         const snapshot = toPlayerSnapshot(observed, player, emulator.gameCode);
         const digest = snapshotDigest(snapshot);
         if (digest === lastDigest.current) return;
-
         lastDigest.current = digest;
+
+        // Render from the local reading, not the server round trip. Your own
+        // team must stay on screen even if the server is down or reconnecting
+        // -- a blip mid-stream should never blank it.
+        setLocal(snapshot);
         run.send({ type: "snapshot", snapshot });
         setPollError(undefined);
       } catch (error) {
@@ -134,7 +170,10 @@ function ConnectedPlayView({
   useEffect(() => () => publisher.current?.close(), []);
 
   const state = run.state;
-  const party = state?.players[player]?.party ?? [];
+  // Prefer the local reading: it is fresher than the server echo and survives
+  // a disconnect. Fall back to server state before the first poll lands.
+  const mine = local ?? state?.players[player];
+  const party = mine?.party ?? [];
 
   return (
     <div className="play">
@@ -154,8 +193,36 @@ function ConnectedPlayView({
 
       {run.error ? <p className="error">{run.error}</p> : null}
       {pollError ? <p className="error">{pollError}</p> : null}
+      {run.status !== "open" ? (
+        <p className="error">
+          Not connected to the PokeShare server, so nothing is syncing to your
+          partner or to the stream view. Your own team below is read straight
+          from the emulator and is still live. Start the server with{" "}
+          <code>pnpm dev:server</code>.
+        </p>
+      ) : null}
 
-      <canvas ref={canvasRef} className="play__canvas" width={240} height={160} />
+      <canvas
+        ref={canvasRef}
+        className="play__canvas"
+        width={240}
+        height={160}
+        tabIndex={0}
+        onClick={activate}
+      />
+      {romName ? (
+        <>
+          <p className="controls">{describeBindings(bindings)}</p>
+          <ControlsPanel
+            bindings={bindings}
+            onChange={setBindings}
+            multiplier={multiplier}
+            onMultiplierChange={setMultiplier}
+            fastForwarding={fastForward.active}
+            onToggleFastForward={fastForward.toggle}
+          />
+        </>
+      ) : null}
 
       {!romName ? (
         <label className="rom-picker">
@@ -200,13 +267,16 @@ function ConnectedPlayView({
         party={party}
         pairs={state?.pairs ?? []}
         player={player}
-        levelCap={state?.levelCap}
+        levelCap={state?.levelCap ?? levelCapForBadges(mine?.badges ?? 0)}
       />
 
       <footer className="play__footer">
-        <span>Badges: {state?.players[player]?.badges ?? 0}</span>
-        <span>Level cap: {state?.levelCap ?? "—"}</span>
-        <span>Route: {state?.players[player]?.route ?? "—"}</span>
+        <span>Badges: {mine?.badges ?? 0}</span>
+        <span>
+          Level cap:{" "}
+          {state?.levelCap ?? levelCapForBadges(mine?.badges ?? 0) ?? "—"}
+        </span>
+        <span>Route: {mine?.route ?? "—"}</span>
         <span>Deaths: {state?.deaths ?? 0}</span>
       </footer>
     </div>

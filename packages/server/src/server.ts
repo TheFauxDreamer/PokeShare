@@ -28,7 +28,8 @@ import { RunRegistry, type Run } from "./runs.js";
 /** Everything we track about one open socket. */
 interface Client {
   readonly socket: WebSocket;
-  readonly token: symbol;
+  /** Stable across reconnects; supplied by the client, not the connection. */
+  clientId: string | undefined;
   run: Run | undefined;
   /** `undefined` for a view-only connection such as /stream or /pairs. */
   player: PlayerId | undefined;
@@ -93,38 +94,44 @@ export function createPokeShareServer(
     }
   }
 
+  /** Seat the client and confirm. Shared by create and join. */
+  function admit(client: Client, run: Run, clientId: string): void {
+    client.run = run;
+    client.clientId = clientId;
+    // A full run is not an error: /stream and /pairs join as spectators, and
+    // `player` is left undefined for them rather than mislabelled as "a".
+    client.player = registry.seat(run, clientId);
+    send(client.socket, {
+      type: "run_created",
+      runId: run.state.runId,
+      joinCode: run.state.joinCode,
+      player: client.player,
+    });
+    broadcast(run);
+  }
+
   function handle(client: Client, message: ClientMessage): void {
     switch (message.type) {
       case "create_run": {
-        const run = registry.create(message.randomised ?? false);
-        client.run = run;
-        client.player = registry.seat(run, client.token);
-        send(client.socket, {
-          type: "run_created",
-          runId: run.state.runId,
-          joinCode: run.state.joinCode,
-          player: client.player ?? "a",
-        });
-        broadcast(run);
+        if (!message.clientId) {
+          send(client.socket, { type: "error", message: "Missing clientId" });
+          return;
+        }
+        admit(client, registry.create(message.randomised ?? false), message.clientId);
         return;
       }
 
       case "join_run": {
+        if (!message.clientId) {
+          send(client.socket, { type: "error", message: "Missing clientId" });
+          return;
+        }
         const run = registry.byCode(message.joinCode);
         if (!run) {
           send(client.socket, { type: "error", message: "No such run" });
           return;
         }
-        client.run = run;
-        // A full run is not an error: /stream and /pairs join as spectators.
-        client.player = registry.seat(run, client.token);
-        send(client.socket, {
-          type: "run_created",
-          runId: run.state.runId,
-          joinCode: run.state.joinCode,
-          player: client.player ?? "a",
-        });
-        broadcast(run);
+        admit(client, run, message.clientId);
         return;
       }
 
@@ -201,7 +208,7 @@ export function createPokeShareServer(
   wss.on("connection", (socket) => {
     const client: Client = {
       socket,
-      token: Symbol("client"),
+      clientId: undefined,
       run: undefined,
       player: undefined,
     };
@@ -237,7 +244,8 @@ export function createPokeShareServer(
     });
 
     socket.on("close", () => {
-      if (client.run) registry.release(client.run, client.token);
+      // The seat is deliberately NOT released: it belongs to the clientId for
+      // the life of the run, so a reconnect returns to the same slot.
       clients.delete(client);
     });
   });

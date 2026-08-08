@@ -21,7 +21,8 @@ function statusLabel(pair: SoulLinkPair): string {
 }
 
 export function PairsView({ joinCode }: { joinCode: string | undefined }) {
-  const run = useRun(joinCode);
+  // Separate scope: the second screen is a spectator, not a player.
+  const run = useRun(joinCode, undefined, { scope: "pairs" });
   const state = run.state;
 
   return (

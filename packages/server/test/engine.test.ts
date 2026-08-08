@@ -256,6 +256,68 @@ describe("manual re-pairing", () => {
   });
 });
 
+/**
+ * Whiting out heals the whole party, so HP returns to full moments after a
+ * faint. A Nuzlocke must not treat that as a resurrection.
+ */
+describe("healing after a faint", () => {
+  function runWithPair() {
+    const state = newRun();
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252)]));
+    applySnapshot(state, snap("b", "Route 103", [mon(2, 255)]));
+    return state;
+  }
+
+  it("keeps a confirmed death dead once the game heals it", () => {
+    const state = runWithPair();
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: 0 })]));
+    confirmDeath(state, "Route 103");
+
+    // White out -> Pokemon Center -> back to full HP.
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: 20 })]));
+
+    const pair = pairsOf(state)[0]!;
+    expect(pair.status).toBe("dead");
+    expect(pair.a?.fainted).toBe(true);
+    expect(toRunState(state).deaths).toBe(1);
+  });
+
+  it("keeps the prompt pending if the heal happens before confirmation", () => {
+    // The likely real sequence: you faint, white out, and only then reach for
+    // the confirm button.
+    const state = runWithPair();
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: 0 })]));
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: 20 })]));
+
+    expect(pairsOf(state)[0]!.status).toBe("pending");
+
+    confirmDeath(state, "Route 103");
+    expect(pairsOf(state)[0]!.status).toBe("dead");
+  });
+
+  it("does not raise a second prompt when a healed Pokemon faints again", () => {
+    const state = runWithPair();
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: 0 })]));
+    applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: 20 })]));
+
+    const events = applySnapshot(
+      state,
+      snap("a", "Route 103", [mon(1, 252, { currentHp: 0 })]),
+    );
+    // Already pending; one faint, one prompt.
+    expect(events.filter((e) => e.type === "death_pending")).toHaveLength(0);
+  });
+
+  it("counts a death once even if the Pokemon faints repeatedly", () => {
+    const state = runWithPair();
+    for (const hp of [0, 20, 0, 20, 0]) {
+      applySnapshot(state, snap("a", "Route 103", [mon(1, 252, { currentHp: hp })]));
+    }
+    confirmDeath(state, "Route 103");
+    expect(toRunState(state).deaths).toBe(1);
+  });
+});
+
 describe("randomised runs", () => {
   /** Zigzagoon (263) and Linoone (264) are one family in vanilla. */
   function runWithFamilyDupe(randomised: boolean) {

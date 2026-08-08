@@ -19,6 +19,7 @@ import {
   saveStateGameCode,
   type GameSnapshot,
 } from "@pokeshare/gba";
+import { applyBindings, loadBindings, type Bindings } from "./input.js";
 
 /** Dedicated slot so polling never clobbers a player's own save states. */
 const POLL_SLOT = 9;
@@ -31,6 +32,9 @@ const SAVESTATE_FLAGS = 0;
 
 export const POLL_INTERVAL_MS = 250;
 
+/** Normal speed. Fast-forward is a multiplier above this. */
+const NORMAL_SPEED = 1;
+
 /** The raw export accepts flags; the typed `saveState` wrapper does not. */
 type WithSlotSave = mGBAEmulator & {
   _saveStateSlot?: (slot: number, flags: number) => boolean;
@@ -39,6 +43,10 @@ type WithSlotSave = mGBAEmulator & {
 export interface Emulator {
   readonly module: mGBAEmulator;
   loadRom(file: File): Promise<void>;
+  /** Re-apply bindings without reloading the ROM. */
+  setBindings(bindings: Bindings): void;
+  /** `1` is normal speed; higher is faster. */
+  setSpeed(multiplier: number): void;
   /** Current game state, or `undefined` before a ROM is running. */
   poll(): GameSnapshot | undefined;
   readonly layout: GameLayout | undefined;
@@ -85,10 +93,33 @@ export async function createEmulator(
       await new Promise<void>((resolve) => {
         module.uploadRom(file, () => resolve());
       });
-      module.loadGame(`${module.filePaths().gamePath}/${file.name}`);
+
+      const romPath = `${module.filePaths().gamePath}/${file.name}`;
+      // loadGame returns false rather than throwing, so an unchecked call
+      // presents as a permanently black canvas with no explanation.
+      if (!module.loadGame(romPath)) {
+        throw new Error(
+          `mGBA refused to load "${file.name}". It may not be a valid GBA ROM, ` +
+            "or it may be zipped — pass the raw .gba file.",
+        );
+      }
+
+      // Bind keys and enable input explicitly; the core's defaults are not
+      // part of its documented API.
+      applyBindings(module, loadBindings());
+      module.toggleInput(true);
+
       // A new ROM may be a different game entirely.
       layout = undefined;
       gameCode = undefined;
+    },
+
+    setBindings(bindings: Bindings) {
+      applyBindings(module, bindings);
+    },
+
+    setSpeed(multiplier: number) {
+      module.setFastForwardMultiplier(Math.max(multiplier, NORMAL_SPEED));
     },
 
     poll() {

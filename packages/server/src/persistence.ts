@@ -20,8 +20,12 @@ import type { PlayerId, PlayerSnapshot } from "@pokeshare/shared";
 import type { EncounterRecord, EngineState } from "./engine.js";
 import { createRun } from "./engine.js";
 
-/** Bumped to 2 when `randomised` was added; a v1 file lacks the clause mode. */
-const FORMAT_VERSION = 2;
+/**
+ * 2 added `randomised` (clause mode); 3 added `seats` (player identity).
+ * Both change meaning rather than just shape, so an older file is rejected
+ * rather than loaded with a silently wrong default.
+ */
+const FORMAT_VERSION = 3;
 
 interface StoredRoute {
   readonly route: string;
@@ -36,6 +40,8 @@ interface StoredRun {
   readonly runId: string;
   readonly joinCode: string;
   readonly randomised: boolean;
+  /** Player slot -> owning client id, so a restart preserves who is who. */
+  readonly seats: [PlayerId, string][];
   readonly snapshots: Record<PlayerId, PlayerSnapshot | undefined>;
   readonly routes: readonly StoredRoute[];
   readonly seenPids: Record<PlayerId, number[]>;
@@ -48,6 +54,7 @@ export function serialise(state: EngineState): StoredRun {
     runId: state.runId,
     joinCode: state.joinCode,
     randomised: state.randomised,
+    seats: [...state.seats],
     snapshots: { a: state.snapshots.a, b: state.snapshots.b },
     routes: [...state.routes].map(([route, entry]) => ({
       route,
@@ -79,6 +86,7 @@ export function deserialise(stored: StoredRun): EngineState {
   const state = createRun(stored.runId, stored.joinCode, stored.randomised);
   state.snapshots.a = stored.snapshots.a;
   state.snapshots.b = stored.snapshots.b;
+  for (const [player, clientId] of stored.seats) state.seats.set(player, clientId);
 
   for (const entry of stored.routes) {
     state.routes.set(entry.route, {

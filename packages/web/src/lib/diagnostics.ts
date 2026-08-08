@@ -146,8 +146,7 @@ export function diagnoseSaveState(bytes: Uint8Array): DiagnosticStep[] {
       step(
         "Badges",
         badges >= 0 && badges <= 8,
-        `${badges} badge(s). Cross-check against the in-game trainer card — ` +
-          "this is the least-verified read in the system.",
+        `${badges} badge(s). Cross-check against the in-game trainer card.`,
       ),
     );
   } catch (error) {

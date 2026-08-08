@@ -239,7 +239,8 @@ Each phase is independently demoable.
 
 ## Risks and open items
 
-- **The whole read path is unproven against a real ROM.** The save-state offsets and the Gen 3 parser are verified against fixtures and against mGBA's own header, but nothing has yet read a live game. Specifically unconfirmed: that `saveState` writes where `filePaths().saveStatePath` says, the state filename convention, and that badges really are 8 bits at `SaveBlock1 + badgeOffset`. *This is the one genuine unknown left.*
+- ~~**The whole read path is unproven against a real ROM.**~~ **Confirmed working** against Pokémon Emerald: state size `0x61000`, magic version 10, game code `BPEE`, party located at `0x020244EC`, all checksums valid, party parsed (`MUDKIP` dex 258 Lv5), route resolved (`Littleroot Town`, MAPSEC 0). The save-state read path, the address tables and the species mapping are all real-world verified.
+- **Badge reading was wrong and is fixed.** The live test reported 1 badge at Littleroot with a level 5 starter. `FLAG_BADGE01_GET` is **bit 7** on Emerald and Ruby/Sapphire (bit 0 only on FR/LG), so the eight badge flags straddle two bytes and a single-byte read counted seven unrelated system flags. Now a 16-bit read shifted by a per-game `badgeBitOffset`. *This is exactly the class of bug fixtures cannot catch — the fixture encoded the same wrong assumption as the code.*
 - **Production must send COOP/COEP.** Some static hosts cannot set response headers at all, which would rule them out entirely.
 - **Emulator performance under OBS**: two wasm cores plus WebRTC encode on the streaming machine. Only one core runs locally per player, so this should be fine, but measure in Phase 4.
 - **TURN relay** will be needed for some NAT pairs; budget for Cloudflare TURN or a small coturn box.

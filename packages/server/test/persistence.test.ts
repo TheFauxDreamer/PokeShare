@@ -127,6 +127,20 @@ describe("round-tripping a run", () => {
     ).toHaveLength(0);
   });
 
+  it("preserves seat ownership across a restart", async () => {
+    // A restart that reshuffled seats would swap the two players just as
+    // surely as a reconnect did.
+    const state = createRun("run-s", "BBBBBB");
+    state.seats.set("a", "alice-client");
+    state.seats.set("b", "bob-client");
+
+    await saveRun(directory, state);
+    const restored = (await loadRun(directory, "run-s"))!;
+
+    expect(restored.seats.get("a")).toBe("alice-client");
+    expect(restored.seats.get("b")).toBe("bob-client");
+  });
+
   it("rejects an unknown format version", () => {
     const stored = { ...serialise(busyRun()), version: 99 };
     expect(() => deserialise(stored)).toThrow(/format/i);

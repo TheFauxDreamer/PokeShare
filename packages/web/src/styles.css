@@ -138,6 +138,78 @@ body {
 .rom-picker span { display: block; margin-bottom: 8px; font-weight: 600; }
 .rom-picker small { display: block; margin-top: 8px; color: var(--muted); }
 .rom-name { color: var(--muted); font-size: 13px; text-align: center; }
+.controls { color: var(--muted); font-size: 12px; text-align: center; margin: 4px 0 12px; }
+.play__canvas:focus { outline: 2px solid var(--a); outline-offset: 2px; }
+.play__canvas:not(:focus) { cursor: pointer; }
+
+.live-team { margin: 16px 0; }
+.live-team__meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.faints {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.faints p { color: var(--muted); margin: 6px 0 0; }
+.faints ul { margin: 6px 0 0; padding-left: 18px; color: var(--dead); }
+
+/* ------------------------------------------------------------- controls */
+
+.controls-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.controls-panel summary { cursor: pointer; font-weight: 600; }
+
+.ff-badge {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 25%, transparent);
+  color: var(--warn);
+  font-size: 11px;
+}
+
+.bindings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.binding {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+}
+.binding--capturing { border-color: var(--warn); color: var(--warn); }
+.binding__input { color: var(--muted); }
+.binding__key { font-family: ui-monospace, monospace; }
+
+.speed { display: flex; align-items: center; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.speed span { color: var(--muted); font-size: 13px; }
+.speed--on { border-color: var(--a); color: var(--a); }
+
+kbd {
+  font-family: ui-monospace, monospace;
+  background: #22282f;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
 
 .prompt {
   background: color-mix(in srgb, var(--warn) 12%, var(--panel));

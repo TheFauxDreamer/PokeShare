@@ -114,7 +114,14 @@ describe("save state fallback", () => {
   iwram[pointerOffset + 1] = (saveBlock1 >>> 8) & 0xff;
   iwram[pointerOffset + 2] = (saveBlock1 >>> 16) & 0xff;
   iwram[pointerOffset + 3] = (saveBlock1 >>> 24) & 0xff;
-  ewram[saveBlock1 - EWRAM_START + EMERALD.badgeOffset] = 0b0000_0011;
+  // Two badges. FLAG_BADGE01_GET is bit 7 on Emerald, so the field starts
+  // there and straddles into the next byte.
+  {
+    const at = saveBlock1 - EWRAM_START + EMERALD.badgeOffset;
+    const value = 0b11 << EMERALD.badgeBitOffset;
+    ewram[at] = value & 0xff;
+    ewram[at + 1] = (value >>> 8) & 0xff;
+  }
 
   const state = buildSaveState({ gameCode: "BPEE", ewram, iwram });
 

@@ -31,10 +31,15 @@ export function StreamView({ joinCode }: { joinCode: string | undefined }) {
   >({});
 
   // Route each answer/ICE back to the subscription that asked for it.
-  const run = useRun(joinCode, (from, payload) => {
-    if (from === "stream") return;
-    subs.current[from]?.accept(payload);
-  });
+  // Its own scope so the OBS browser source never reclaims a player's seat.
+  const run = useRun(
+    joinCode,
+    (from, payload) => {
+      if (from === "stream") return;
+      subs.current[from]?.accept(payload);
+    },
+    { scope: "stream" },
+  );
 
   const videoRefs = {
     a: useRef<HTMLVideoElement | null>(null),

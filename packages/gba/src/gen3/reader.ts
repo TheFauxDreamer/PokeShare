@@ -84,8 +84,14 @@ export function readLocation(
 /**
  * Count gym badges.
  *
- * Badges are eight consecutive flag bits inside SaveBlock1. Ruby/Sapphire
- * address SaveBlock1 directly; Emerald and FR/LG store a pointer to it.
+ * The eight badge flags are consecutive bits inside SaveBlock1's flag array,
+ * but they do NOT start on a byte boundary in every game: Emerald and
+ * Ruby/Sapphire put FLAG_BADGE01_GET at bit 7, so the eight flags straddle two
+ * bytes. Reading a single byte there counts seven unrelated system flags as
+ * badges — which reports a badge before the first gym.
+ *
+ * Reading 16 bits and shifting by `badgeBitOffset` handles both layouts.
+ * Ruby/Sapphire address SaveBlock1 directly; Emerald and FR/LG store a pointer.
  */
 export function readBadges(memory: MemorySource, layout: GameLayout): number {
   const base =
@@ -93,10 +99,12 @@ export function readBadges(memory: MemorySource, layout: GameLayout): number {
       ? memory.readU32(layout.saveBlock1.address)
       : layout.saveBlock1.address;
 
-  const flags = memory.readU8(base + layout.badgeOffset);
+  const window = memory.readU16(base + layout.badgeOffset);
+  const badges = (window >>> layout.badgeBitOffset) & 0xff;
+
   let count = 0;
   for (let bit = 0; bit < 8; bit += 1) {
-    if ((flags >>> bit) & 1) count += 1;
+    if ((badges >>> bit) & 1) count += 1;
   }
   return count;
 }
