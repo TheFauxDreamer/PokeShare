@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/data" },
+    { "path": "./packages/shared" },
+    { "path": "./packages/gba" }
+  ]
+}

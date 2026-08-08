@@ -133,6 +133,38 @@ PokeShare/
 
 ---
 
+## How the two games get linked
+
+Soul Link has **no in-game connection** — no link cable, no trading, no netplay. Today it is a social contract plus a spreadsheet, and the hand-logging is exactly what this project removes. In PokeShare the link is a **shared run on the server**, established once and never touched again.
+
+**Setup (one time):**
+1. Player A opens `/play`, loads their ROM, clicks **Create run** → server mints a run ID and a short join code (e.g. `K7QP2M`).
+2. A sends B the code, or the link `/play?run=K7QP2M`.
+3. B opens it, loads their own ROM, and is player B. Both browsers are now subscribed to the same run over WebSocket.
+
+**Everything after that is automatic:**
+
+| Thing | How it is linked | Manual work |
+|---|---|---|
+| Party (species, level, HP, status) | Read from RAM at 4 Hz, pushed to server | none |
+| New encounter | Wild battle detected → species + route read from RAM | none |
+| Pair formation | Server matches both players' encounters **by route name** | none |
+| Faint | HP `>0 → 0` → server flags the pair | one click |
+| Partner death cascade | On confirm, both halves marked dead on every view | none |
+| Level cap | Badge count read from the save block | none |
+
+Neither player ever types a species, level, or route. The **only** human action in the loop is confirming a death — deliberately, so a RAM misread can never silently corrupt the run.
+
+**Route-name pairing means the players do not have to stay in sync.** If A is two gyms ahead, nothing breaks: A's Route 110 encounter sits unpaired until B reaches Route 110, then the pair forms retroactively. No lockstep, no checkpoint discipline, no drift to correct. This only works because vanilla Gen 3 has a stable, shared route list — and it is the reason this design fits far better than the superseded Emerald Rogue plan, which needed fragile ordinal matching.
+
+**Edge cases the linking layer must handle:**
+- **Different games** (FireRed ↔ LeafGreen, Ruby ↔ Sapphire): routes map 1:1, so pairing is unchanged. Cross-generation is not supported.
+- **Whiffed encounter** (fled or KO'd): "no encounter here" voids that route for both players so it never blocks pairing.
+- **Re-entering a route**: only the *first* wild battle on a route counts; later ones are ignored.
+- **Randomiser seeds**: same seed for both players gives identical encounter pools per route; different seeds make each side independent. Both work — pairing keys off route name and species are read live.
+
+---
+
 ## Key technical decisions
 
 **Locating EWRAM in the heap.** Don't blind-scan for a party. The GBA address of `gPlayerParty` is *known per version* from the Ironmon tables, so only one unknown exists: where EWRAM's 256 KB block starts inside the wasm heap. Find it once by scanning candidate offsets and validating that (a) `gPlayerPartyCount` reads 1–6 and (b) the party blocks at the implied address pass their `0x1C` checksums. Cache the base; re-resolve only after N consecutive validation failures (game reset). This is far more reliable than a structural party search and reuses the checksum as a free oracle.

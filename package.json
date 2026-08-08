@@ -1,0 +1,19 @@
+{
+  "name": "pokeshare",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser Soul Link Nuzlocke for Gen 3 Pokemon",
+  "scripts": {
+    "typecheck": "tsc -b && tsc -p tsconfig.tests.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gen:mapsec": "python3 scripts/gen-mapsec.py"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

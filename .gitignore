@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local
+
+# Never commit ROMs, saves, or save states. See the Legal section of PLAN.md.
+*.gba
+*.sav
+*.ss[0-9]
+*.srm
+roms/
