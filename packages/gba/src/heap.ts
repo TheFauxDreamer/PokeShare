@@ -12,7 +12,17 @@
  * back. From there the whole heap -- including emulated EWRAM and IWRAM -- is a
  * plain typed array, and reads cost nothing per poll.
  *
- * This is the primary path. See savestate.ts for the fallback.
+ * STATUS: this is currently the *secondary* path. Inspecting the shipped build
+ * showed `updateMemoryViews()` assigning only to module-scope variables, with
+ * zero occurrences of `Module["HEAPU8"]` -- so the `extends EmscriptenModule`
+ * declaration is optimistic and the heap really is unreachable through the
+ * public API. The core is also threaded (`wasmMemory` arrives via `msgData`
+ * from a pthread worker), so memory is *imported* into the module rather than
+ * exported from it, and overriding `instantiateWasm` risks disturbing the
+ * worker bootstrap. savestate.ts is used instead: fully supported, verified
+ * offsets, and cheap enough at 4 Hz.
+ *
+ * Keep this for the day it is worth eliminating the per-poll serialise cost.
  */
 
 export interface HeapCapture {
@@ -50,14 +60,12 @@ export function createHeapCapture(wasmBinary: BufferSource): HeapCapture {
   return {
     instantiateWasm: (imports, successCallback) => {
       void WebAssembly.instantiate(wasmBinary, imports).then((output) => {
+        // A threaded build imports a shared memory rather than exporting one,
+        // so the import is the expected case here, not the fallback.
+        const imported = imports["env"]?.["memory"];
         const exported = output.instance.exports["memory"];
-        if (exported instanceof WebAssembly.Memory) {
-          memory = exported;
-        } else {
-          // Emscripten can import memory instead of exporting it.
-          const imported = imports["env"]?.["memory"];
-          if (imported instanceof WebAssembly.Memory) memory = imported;
-        }
+        if (imported instanceof WebAssembly.Memory) memory = imported;
+        else if (exported instanceof WebAssembly.Memory) memory = exported;
         successCallback(output.instance, output.module);
       });
       return {};

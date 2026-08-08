@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Browser Soul Link Nuzlocke for Gen 3 Pokemon",
   "scripts": {
-    "typecheck": "tsc -b && tsc -p tsconfig.tests.json",
+    "typecheck": "tsc -b && tsc -p tsconfig.tests.json && tsc -p packages/web/tsconfig.json",
+    "build": "pnpm --filter @pokeshare/web build",
     "dev:server": "pnpm --filter @pokeshare/server dev",
     "test": "vitest run",
     "test:watch": "vitest",

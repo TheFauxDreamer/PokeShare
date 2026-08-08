@@ -28,7 +28,7 @@ not yet. Current state:
 | `packages/gba` | Gen 3 decrypt/parse, RAM location, save-state fallback | Written, untested against a real ROM |
 | `packages/shared` | Wire protocol between play view, server and displays | Written |
 | `packages/server` | Run state, route pairing, death cascade, clauses, signalling | Written and tested; state is in-memory only |
-| `packages/web` | The three views | Not started |
+| `packages/web` | The three views, emulator wiring, WebRTC video | Written; builds and serves, untested against a real ROM |
 
 ## Getting started
 
@@ -36,10 +36,24 @@ Requires Node 20+ and pnpm.
 
 ```bash
 pnpm install
-pnpm test        # 69 tests: Gen 3 parsing, RAM location, rules engine, sockets
+pnpm test        # 81 tests: Gen 3 parsing, RAM location, rules engine, sockets
 pnpm typecheck
-pnpm dev:server  # http + ws on :8080, GET /health
+pnpm build
+
+# Two terminals:
+pnpm dev:server                      # http + ws on :8080
+pnpm --filter @pokeshare/web dev     # views on :5173
 ```
+
+Then open `/play`, pick your ROM, and share the join code. `/stream` is the OBS
+browser source (1920×1080); `/pairs` is the second screen.
+
+> **Cross-origin isolation is required.** The mGBA core is threaded and needs
+> `SharedArrayBuffer`, so every response must carry
+> `Cross-Origin-Opener-Policy: same-origin` and
+> `Cross-Origin-Embedder-Policy: require-corp`. Vite sets these in dev and
+> preview; **production hosting must send them too** or the emulator will not
+> start.
 
 To regenerate the route tables from the pret decompilations:
 

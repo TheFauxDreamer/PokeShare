@@ -36,12 +36,16 @@ No project combines browser ROM + two-player soul link + stream output. Build it
 
 **2. `@thenick775/mgba-wasm` exposes no memory-read API — but the heap is still reachable.** This was the single biggest risk and it is now resolved. Inspecting the shipped `mgba.d.ts`, `main.c` and `memory.c`: there is **no** `readMemory`/`readRange`, and `main.c`'s `EMSCRIPTEN_KEEPALIVE` exports cover only input, save states, audio and lifecycle. `memory.c` is just `memalign`/`free` helpers, not emulated memory. Grepping the built `dist/mgba.js` confirms `Module["..."]` exports include `FS`, `cwrap`, `addFunction` and `instantiateWasm`, but **not** `HEAPU8`/`wasmMemory`.
 
-Two ways in, neither requiring a fork:
+**Resolved by inspecting the shipped build — save state is the read path.**
 
-- **Primary — `Module.instantiateWasm` hook.** This standard Emscripten hook lets the host instantiate the wasm module itself. Doing so yields the `WebAssembly.Memory` object, and therefore `new Uint8Array(memory.buffer)` — the entire heap, including emulated EWRAM. Reads are then plain typed-array indexing at effectively zero cost.
-- **Fallback — savestate parsing.** `saveStateSlot(slot, 0)` writes a raw state into the Emscripten FS, readable via the exported `FS.readFile`. Verified against mGBA's `serialize.h`: `struct GBASerializedState` is `static_assert`-ed at **`0x61000` bytes**, with `wram` (256 KB EWRAM) as the **final** field — so EWRAM sits at a fixed offset of **`0x21000`**, and IWRAM at `0x19000`. Fully supported APIs, no fork, just heavier per poll.
+- `updateMemoryViews()` assigns heap views to *module-scope variables only*; there are **zero** occurrences of `Module["HEAPU8"]` in `dist/mgba.js`. The `mGBAEmulator extends EmscriptenModule` declaration is optimistic typing, not a runtime guarantee.
+- The core is **threaded** (`wasmMemory = msgData.wasmMemory` arrives from a pthread worker), so memory is *imported* into the module rather than exported from it, and overriding `instantiateWasm` risks disturbing the worker bootstrap.
+- Therefore: **`saveState` + `FS.readFile`, then parse.** Both are supported, documented APIs. Verified against mGBA's `serialize.h`: `struct GBASerializedState` is `static_assert`-ed at **`0x61000` bytes**, IWRAM at **`0x19000`**, WRAM/EWRAM at **`0x21000`**, and the 4-character game code at `0x1C`. At 4 Hz the ~390 KB serialise per poll is negligible beside video encoding.
+- `SAVESTATE_SCREENSHOT` (bit 0) **must be off** — with it set mGBA wraps the state in a PNG and every offset above is invalid.
 
-Phase 1 is a spike that settles which one ships.
+`packages/gba/src/heap.ts` keeps the `instantiateWasm` approach for the day the per-poll serialise cost is worth eliminating, but it is not on the critical path.
+
+**Cross-origin isolation is mandatory.** Because the core uses threads, it needs `SharedArrayBuffer`, which requires `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Without both headers the emulator does not start at all. These are set in `packages/web/vite.config.ts` for dev and preview, and **production hosting must send them too** — this constrains where the app can be deployed and is easy to miss until it fails.
 
 **3. Randomised ROMs are nearly free — with one real exception.** UPR-ZX rewrites *data tables* (species, encounters, movesets), not code layout, the party struct, or the map list. So the same memory reader, the same route list and the same address tables work on vanilla and randomised alike. The one exception is the **species clause**: it depends on evolutionary families, and randomisers rewrite evolutions. Resolve this by reading the game's **own randomised evolution table out of ROM memory** rather than shipping a static family table — correct by construction on any ROM. ([RandomizerLog.lua](https://github.com/besteon/Ironmon-Tracker/blob/main/ironmon_tracker/data/RandomizerLog.lua) is a reference for optional log import, not a dependency.)
 
@@ -232,7 +236,8 @@ Each phase is independently demoable.
 
 ## Risks and open items
 
-- **`instantiateWasm` heap access is unproven** until the Phase 1 spike. Savestate parsing is a verified fallback with known offsets, so the phase cannot hard-fail — but it may cost more per poll. *This is the only genuine unknown in the plan.*
+- **The whole read path is unproven against a real ROM.** The save-state offsets and the Gen 3 parser are verified against fixtures and against mGBA's own header, but nothing has yet read a live game. Specifically unconfirmed: that `saveState` writes where `filePaths().saveStatePath` says, the state filename convention, and that badges really are 8 bits at `SaveBlock1 + badgeOffset`. *This is the one genuine unknown left.*
+- **Production must send COOP/COEP.** Some static hosts cannot set response headers at all, which would rule them out entirely.
 - **Emulator performance under OBS**: two wasm cores plus WebRTC encode on the streaming machine. Only one core runs locally per player, so this should be fine, but measure in Phase 4.
 - **TURN relay** will be needed for some NAT pairs; budget for Cloudflare TURN or a small coturn box.
 - **Input latency** in-browser vs native — verify it's acceptable to the players early, in Phase 2, since it affects whether they'll actually want to play this way.

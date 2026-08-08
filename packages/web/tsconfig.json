@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@pokeshare/data": ["../data/src/index.ts"],
+      "@pokeshare/gba": ["../gba/src/index.ts"],
+      "@pokeshare/shared": ["../shared/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
