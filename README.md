@@ -77,3 +77,7 @@ your machine and what is safe to delete.
 You supply your own. ROMs are loaded from local disk into your own browser and
 are never uploaded. `.gitignore` refuses to commit `*.gba`, `*.sav` and save
 states. See [NOTICE.md](NOTICE.md).
+
+## AI
+
+Like gaga I don't know the first thing about Pokemon magic web streaming reading memory. AI'd the shit outta this to see what was possible
