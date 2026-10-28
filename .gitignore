@@ -6,6 +6,7 @@ dist/
 # Leading slash matters: a bare `data/` also matches packages/data/, which
 # would silently untrack that whole package's sources.
 /data/
+packages/server/data/
 .DS_Store
 .env
 .env.local
